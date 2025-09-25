@@ -1,0 +1,27 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Core.Utilities.Extensions
+{
+    public static class ClaimsExtensions
+    {
+        public static void AddEmail(this ICollection<Claim> claims, string email)
+            => claims.Add(new Claim(ClaimTypes.Email, email));
+
+        public static void AddName(this ICollection<Claim> claims, string name)
+            => claims.Add(new Claim(ClaimTypes.Name, name));
+
+        public static void AddRoles(this ICollection<Claim> claims, params string[] roles)
+        {
+            foreach (var role in roles)
+                claims.Add(new Claim(ClaimTypes.Role, role));
+        }
+
+        public static List<string> Roles(this ClaimsPrincipal user)
+            => user?.Claims?.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList() ?? new();
+    }
+}
