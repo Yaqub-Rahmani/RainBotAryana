@@ -1,8 +1,10 @@
 ﻿using Business.Abstract;
 using Core.Utilities.Query;
 using Entities.Concrete;
+using Entities.Dtos.Accrual;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace WebAPI.Controllers
 {
@@ -11,77 +13,79 @@ namespace WebAPI.Controllers
     public class AccrualsController : ControllerBase
     {
         private readonly IAccrualService _service;
-        public AccrualsController(IAccrualService service) { _service = service; }
+        public AccrualsController(IAccrualService service) => _service = service;
 
-        // Okumalar anonim
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult GetAll() => Ok(_service.GetAll().Data);
+        [HttpGet, AllowAnonymous]
+        public IActionResult GetAll([FromQuery] Guid? shopId, [FromQuery] Guid? tenantId, [FromQuery] int? year, [FromQuery] int? month, [FromQuery] AccrualStatus? status)
+            => Ok(_service.GetAll(shopId, tenantId, year, month, status).Data);
 
-        [HttpGet("{id:guid}")]
-        [AllowAnonymous]
+        [HttpGet("{id:guid}"), AllowAnonymous]
         public IActionResult Get(Guid id)
         {
             var r = _service.GetById(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("details")]
-        [AllowAnonymous]
-        public IActionResult GetDetails([FromQuery] QueryOptions opt)
+        [HttpGet("{id:guid}/detail"), AllowAnonymous]
+        public IActionResult Detail(Guid id)
         {
-            var r = _service.GetDetails(opt);
-            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
-        }
-
-        [HttpGet("{id:guid}/detail")]
-        [AllowAnonymous]
-        public IActionResult GetDetail(Guid id)
-        {
-            var r = _service.GetDetailById(id);
+            var r = _service.GetDetail(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        // Yazmalar korumalı
-        [HttpPost]
-        [Authorize]
-        public IActionResult Add([FromBody] Accrual dto)
+        [HttpPost, Authorize]
+        public IActionResult Add([FromBody] AccrualCreateDto dto)
         {
-            var r = _service.Add(dto);
-            return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
-        }
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
 
-        [HttpPut("{id:guid}")]
-        [Authorize]
-        public IActionResult Update(Guid id, [FromBody] Accrual dto)
-        {
-            if (id != dto.Id) return BadRequest("Id mismatch.");
-            var r = _service.Update(dto);
-            return r.Success ? Ok() : BadRequest(r.Message);
-        }
-
-        [HttpDelete("{id:guid}")]
-        [Authorize]
-        public IActionResult Delete(Guid id)
-        {
-            var r = _service.Delete(id);
-            return r.Success ? Ok() : NotFound(r.Message);
-        }
-
-        // İşlemsel uçlar
-        [HttpPost("{id:guid}/initialize-outstanding")]
-        [Authorize]
-        public IActionResult InitializeOutstanding(Guid id)
-        {
-            var r = _service.InitializeOutstanding(id);
+            var r = _service.Add(dto, userId);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpPost("{id:guid}/settle")]
-        [Authorize]
-        public IActionResult ApplySettlement(Guid id, [FromBody] decimal amount)
+        [HttpPut("{id:guid}"), Authorize]
+        public IActionResult Update(Guid id, [FromBody] AccrualUpdateDto dto)
         {
-            var r = _service.ApplySettlement(id, amount);
+            if (id != dto.Id) return BadRequest("شناسه نامعتبر است.");
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var r = _service.Update(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+        }
+
+        [HttpDelete("{id:guid}"), Authorize]
+        public IActionResult Delete(Guid id)
+        {
+            var r = _service.Delete(id);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+        }
+
+        [HttpPost("{id:guid}/settle"), Authorize]
+        public IActionResult Settle(Guid id, [FromBody] AccrualSettleDto dto)
+        {
+            if (id != dto.AccrualId) return BadRequest("شناسه نامعتبر است.");
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var r = _service.Settle(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+        }
+
+        [HttpPost("{id:guid}/reopen"), Authorize]
+        public IActionResult Reopen(Guid id)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var r = _service.Reopen(id, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+        }
+
+        [HttpPost("{id:guid}/recalc"), Authorize]
+        public IActionResult Recalculate(Guid id)
+        {
+            var r = _service.RecalculateOutstanding(id);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
     }

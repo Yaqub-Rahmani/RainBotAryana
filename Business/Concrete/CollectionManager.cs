@@ -1,18 +1,23 @@
 ﻿using Business.Abstract;
 using Business.BusinessAspects.Autofac;
 using Business.ValidationRules.FluentValidation;
+using Business.ValidationRules.FluentValidation.Collection;
 using Core.Aspects.Autofac.Caching;
 using Core.Aspects.Autofac.Transaction;
 using Core.Aspects.Autofac.Validation;
 using Core.Extensions;
+using Core.Utilities.KabulDateTime;
 using Core.Utilities.Paging;
 using Core.Utilities.Query;
 using Core.Utilities.Results;
 using DataAccess.Abstract;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.Collection;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,159 +26,156 @@ namespace Business.Concrete
 {
     public class CollectionManager : ICollectionService
     {
-        private readonly ICollectionDal _collectionDal;
-        private readonly ITenantDal _tenantDal;
-        private readonly IShopDal _shopDal;
+        private readonly ICollectionDal _dal;
+        private readonly ICollectionAllocationDal _allocDal; // varsayılan
+        private readonly ITimeProvider _timeProvider;
 
-        public CollectionManager(ICollectionDal collectionDal, ITenantDal tenantDal, IShopDal shopDal)
+        public CollectionManager(ICollectionDal dal, ICollectionAllocationDal allocDal, ITimeProvider timeProvider)
         {
-            _collectionDal = collectionDal;
-            _tenantDal = tenantDal;
-            _shopDal = shopDal;
+            _timeProvider = timeProvider;
+            _dal = dal;
+            _allocDal = allocDal;
         }
 
-        // ---------- Okumalar ----------
         [CacheAspect(10)]
-        public IDataResult<List<Collection>> GetAll()
-            => new SuccessDataResult<List<Collection>>(
-                _collectionDal.QueryNoTracking().OrderByDescending(x => x.PaidAtUtc).ToList()
-            );
+        public IDataResult<List<Collection>> GetAll(Guid? tenantId = null, Guid? shopId = null, DateTime? fromUtc = null, DateTime? toUtc = null)
+        {
+            var q = _dal.QueryNoTracking();
+
+            if (tenantId.HasValue) q = q.Where(x => x.TenantId == tenantId.Value);
+            if (shopId.HasValue) q = q.Where(x => x.ShopId == shopId.Value);
+            if (fromUtc.HasValue) q = q.Where(x => x.PaidAtUtc >= fromUtc.Value);
+            if (toUtc.HasValue) q = q.Where(x => x.PaidAtUtc < toUtc.Value);
+
+            return new SuccessDataResult<List<Collection>>(q.OrderByDescending(x => x.PaidAtUtc).ToList());
+        }
 
         [CacheAspect(10)]
         public IDataResult<Collection> GetById(Guid id)
         {
-            var e = _collectionDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
-            return e == null ? new ErrorDataResult<Collection>(null, "یافت نشد.") : new SuccessDataResult<Collection>(e);
+            var e = _dal.QueryNoTracking()
+                        .Include(x => x.Allocations)
+                        .FirstOrDefault(x => x.Id == id);
+            return e == null
+                ? new ErrorDataResult<Collection>(null, "یافت نشد.")
+                : new SuccessDataResult<Collection>(e);
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<CollectionDetailDto>> GetDetails(QueryOptions opt)
+        public IDataResult<CollectionDetailDto> GetDetail(Guid id)
         {
-            opt ??= new QueryOptions();
-            var q = _collectionDal.QueryNoTracking();
+            var e = _dal.QueryNoTracking()
+                        .Include(x => x.Allocations)
+                        .FirstOrDefault(x => x.Id == id);
+            if (e == null) return new ErrorDataResult<CollectionDetailDto>(null, "یافت نشد.");
 
-            q = q.ApplyFilters(opt.Filters);
-            if (!string.IsNullOrWhiteSpace(opt.Search))
+            var allocated = e.Allocations?.Sum(a => a.Amount) ?? 0m;
+            var unallocated = Math.Round(Math.Max(0m, e.AmountReceived - allocated), 2, MidpointRounding.AwayFromZero);
+
+            return new SuccessDataResult<CollectionDetailDto>(new CollectionDetailDto
             {
-                var key = opt.Search.Trim();
-                q = q.Where(c => (c.Notes ?? "").Contains(key) || (c.ReferenceNo ?? "").Contains(key));
+                Id = e.Id,
+                TenantId = e.TenantId,
+                ShopId = e.ShopId,
+                ContractId = e.ContractId,
+                PaidAtUtc = e.PaidAtUtc,
+                CreatedByUserId = e.CreatedByUserId,
+                UpdatedByUserId = e.UpdatedByUserId,
+                UpdatedAtUtc = e.UpdatedAtUtc,
+                AmountReceived = e.AmountReceived,
+                Method = e.Method,
+                ReferenceNo = e.ReferenceNo,
+                TargetYear = e.TargetYear,
+                TargetMonth = e.TargetMonth,
+                Notes = e.Notes,
+                AllocationCount = e.Allocations?.Count ?? 0,
+                AllocatedTotal = allocated,
+                UnallocatedAmount = unallocated
+            });
+        }
+
+        [ValidationAspect(typeof(CollectionCreateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("ICollectionService.Get")]
+        public IResult Add(CollectionCreateDto dto, int userId)
+        {
+            var nowUtc = _timeProvider.UtcNow();
+            var todayGregorian = _timeProvider.Today();          // DateOnly (Kabul, Gregorian)
+            var (py, pm, _) = _timeProvider.TodayPersian();      // Örn: (1404, 8, 15)
+
+            var entity = new Collection
+            {
+                Id = Guid.NewGuid(),
+                TenantId = dto.TenantId,
+                ShopId = dto.ShopId,
+                ContractId = dto.ContractId,
+                PaidAtUtc = nowUtc,
+                CreatedByUserId = userId,
+                AmountReceived = Math.Round(dto.AmountReceived, 2, MidpointRounding.AwayFromZero),
+                Method = dto.Method,
+                ReferenceNo = dto.ReferenceNo,
+                TargetYear = py,
+                TargetMonth = pm,
+                Notes = dto.Notes
+            };
+
+            _dal.Add(entity);
+
+            var amt = entity.AmountReceived.ToString(CultureInfo.InvariantCulture);
+            return new SuccessResult($"دریافت با مبلغ {amt} ثبت شد.");
+        }
+
+
+        [ValidationAspect(typeof(CollectionUpdateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("ICollectionService.Get")]
+        public IResult Update(CollectionUpdateDto dto, int userId)
+        {
+            var e = _dal.Query().Include(x => x.Allocations).FirstOrDefault(x => x.Id == dto.Id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+
+            // Dağıtım toplamını aşma
+            var allocated = e.Allocations?.Sum(a => a.Amount) ?? 0m;
+            var newAmount = Math.Round(dto.AmountReceived, 2, MidpointRounding.AwayFromZero);
+            if (newAmount < allocated)
+            {
+                var minStr = allocated.ToString(CultureInfo.InvariantCulture);
+                return new ErrorResult($"مبلغ دریافتی نمی‌تواند از مجموع تخصیص‌ها ({minStr}) کمتر باشد.");
             }
 
-            q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(c => c.PaidAtUtc);
+            e.TenantId = dto.TenantId;
+            e.ShopId = dto.ShopId;
+            e.ContractId = dto.ContractId;
+            e.PaidAtUtc = dto.PaidAtUtc;
+            e.AmountReceived = newAmount;
+            e.Method = dto.Method;
+            e.ReferenceNo = dto.ReferenceNo;
+            e.TargetYear = dto.TargetYear;
+            e.TargetMonth = dto.TargetMonth;
+            e.Notes = dto.Notes;
+            e.UpdatedByUserId = userId;
+            e.UpdatedAtUtc = DateTime.UtcNow;
 
-            var projected = from c in q
-                            join t in _tenantDal.QueryNoTracking() on c.TenantId equals t.Id
-                            join s in _shopDal.QueryNoTracking() on c.ShopId equals s.Id
-                            select new CollectionDetailDto
-                            {
-                                Id = c.Id,
-                                TenantId = c.TenantId,
-                                TenantName = t.DisplayName,
-                                ShopId = c.ShopId,
-                                ShopName = s.Name,
-                                ContractId = c.ContractId,
-                                PaidAtUtc = c.PaidAtUtc,
-                                AmountReceived = c.AmountReceived,
-                                Method = c.Method.ToString(),
-                                ReferenceNo = c.ReferenceNo,
-                                TargetYear = c.TargetYear,
-                                TargetMonth = c.TargetMonth,
-                                Notes = c.Notes,
-                                AllocationCount = c.Allocations.Count
-                            };
-
-            var total = projected.Count();
-            var items = projected.ApplyPaging(opt.Page, opt.PageSize).ToList();
-
-            var page = new PagedResult<CollectionDetailDto>
-            {
-                Items = items,
-                Page = opt.Page,
-                PageSize = opt.PageSize,
-                TotalCount = total
-            };
-            return new SuccessDataResult<PagedResult<CollectionDetailDto>>(page);
+            _dal.Update(e);
+            return new SuccessResult("بروز شد.");
         }
 
-        [CacheAspect(10)]
-        public IDataResult<CollectionDetailDto> GetDetailById(Guid id)
-        {
-            var dto = (from c in _collectionDal.QueryNoTracking().Where(x => x.Id == id)
-                       join t in _tenantDal.QueryNoTracking() on c.TenantId equals t.Id
-                       join s in _shopDal.QueryNoTracking() on c.ShopId equals s.Id
-                       select new CollectionDetailDto
-                       {
-                           Id = c.Id,
-                           TenantId = c.TenantId,
-                           TenantName = t.DisplayName,
-                           ShopId = c.ShopId,
-                           ShopName = s.Name,
-                           ContractId = c.ContractId,
-                           PaidAtUtc = c.PaidAtUtc,
-                           AmountReceived = c.AmountReceived,
-                           Method = c.Method.ToString(),
-                           ReferenceNo = c.ReferenceNo,
-                           TargetYear = c.TargetYear,
-                           TargetMonth = c.TargetMonth,
-                           Notes = c.Notes,
-                           AllocationCount = c.Allocations.Count
-                       }).FirstOrDefault();
-
-            return dto == null ? new ErrorDataResult<CollectionDetailDto>(null, "یافت نشد.")
-                               : new SuccessDataResult<CollectionDetailDto>(dto);
-        }
-
-        // ---------- Yazmalar ----------
-        [SecuredOperation("collection.write,admin")]
-        [ValidationAspect(typeof(CollectionValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("ICollectionService.Get")]
-        public IResult Add(Collection collection)
-        {
-            if (_tenantDal.Get(x => x.Id == collection.TenantId) == null)
-                return new ErrorResult("مستاجر یافت نشد.");
-            if (_shopDal.Get(x => x.Id == collection.ShopId) == null)
-                return new ErrorResult("فروشگاه یافت نشد.");
-
-            _collectionDal.Add(collection);
-            return new SuccessResult("دریافت وجه ثبت شد.");
-        }
-
-        [SecuredOperation("collection.write,admin")]
-        [ValidationAspect(typeof(CollectionValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("ICollectionService.Get")]
-        public IResult Update(Collection collection)
-        {
-            var current = _collectionDal.Get(x => x.Id == collection.Id);
-            if (current == null) return new ErrorResult("یافت نشد.");
-
-            current.TenantId = collection.TenantId;
-            current.ShopId = collection.ShopId;
-            current.ContractId = collection.ContractId;
-            current.PaidAtUtc = collection.PaidAtUtc;
-            current.AmountReceived = collection.AmountReceived;
-            current.Method = collection.Method;
-            current.ReferenceNo = collection.ReferenceNo;
-            current.TargetYear = collection.TargetYear;
-            current.TargetMonth = collection.TargetMonth;
-            current.Notes = collection.Notes;
-
-            _collectionDal.Update(current);
-            return new SuccessResult("بروزرسانی شد.");
-        }
-
-        [SecuredOperation("collection.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("ICollectionService.Get")]
+        [TransactionScopeAspect, CacheRemoveAspect("ICollectionService.Get")]
         public IResult Delete(Guid id)
         {
-            var e = _collectionDal.Get(x => x.Id == id);
+            var e = _dal.Query().Include(x => x.Allocations).FirstOrDefault(x => x.Id == id);
             if (e == null) return new ErrorResult("یافت نشد.");
-            _collectionDal.Delete(e);
-            return new SuccessResult("حذف شد.");
+
+            if ((e.Allocations?.Any() ?? false))
+                return new ErrorResult("به علت وجود تخصیص‌ها حذف ممکن نیست.");
+
+            try
+            {
+                _dal.Delete(e);
+                return new SuccessResult("حذف شد.");
+            }
+            catch (DbUpdateException)
+            {
+                return new ErrorResult("حذف به علت وابستگی داده‌ها ممکن نیست.");
+            }
         }
     }
 }

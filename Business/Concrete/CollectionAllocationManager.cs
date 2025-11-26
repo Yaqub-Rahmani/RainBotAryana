@@ -1,6 +1,7 @@
 ﻿using Business.Abstract;
 using Business.BusinessAspects.Autofac;
 using Business.ValidationRules.FluentValidation;
+using Business.ValidationRules.FluentValidation.CollectionAllocation;
 using Core.Aspects.Autofac.Caching;
 using Core.Aspects.Autofac.Transaction;
 using Core.Aspects.Autofac.Validation;
@@ -11,8 +12,11 @@ using Core.Utilities.Results;
 using DataAccess.Abstract;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.CollectionAllocation;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,154 +25,119 @@ namespace Business.Concrete
 {
     public class CollectionAllocationManager : ICollectionAllocationService
     {
-        private readonly ICollectionAllocationDal _allocationDal;
-        private readonly IShopDal _shopDal;
-        private readonly ITenantDal _tenantDal;
+        private readonly ICollectionAllocationDal _dal;
 
-        public CollectionAllocationManager(ICollectionAllocationDal allocationDal, IShopDal shopDal, ITenantDal tenantDal)
+        public CollectionAllocationManager(ICollectionAllocationDal dal)
         {
-            _allocationDal = allocationDal;
-            _shopDal = shopDal;
-            _tenantDal = tenantDal;
+            _dal = dal;
         }
 
         [CacheAspect(10)]
-        public IDataResult<List<CollectionAllocation>> GetAll()
-            => new SuccessDataResult<List<CollectionAllocation>>(
-                _allocationDal.QueryNoTracking().OrderByDescending(x => x.Id).ToList()
-            );
+        public IDataResult<List<CollectionAllocation>> GetAll(Guid? collectionId = null, Guid? contractId = null)
+        {
+            var q = _dal.QueryNoTracking();
+
+            if (collectionId.HasValue)
+                q = q.Where(x => x.CollectionId == collectionId.Value);
+
+            if (contractId.HasValue)
+                q = q.Where(x => x.ContractId == contractId.Value);
+
+            return new SuccessDataResult<List<CollectionAllocation>>(q.ToList());
+        }
 
         [CacheAspect(10)]
         public IDataResult<CollectionAllocation> GetById(Guid id)
         {
-            var e = _allocationDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
-            return e == null ? new ErrorDataResult<CollectionAllocation>(null, "یافت نشد.")
-                             : new SuccessDataResult<CollectionAllocation>(e);
+            var e = _dal.Get(x => x.Id == id);
+            return e == null
+                ? new ErrorDataResult<CollectionAllocation>(null, "یافت نشد.")
+                : new SuccessDataResult<CollectionAllocation>(e);
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<CollectionAllocationDetailDto>> GetDetails(QueryOptions opt)
+        public IDataResult<CollectionAllocationDetailDto> GetDetail(Guid id)
         {
-            opt ??= new QueryOptions();
-            var q = _allocationDal.QueryNoTracking();
+            var e = _dal.Get(x => x.Id == id);
+            if (e == null) return new ErrorDataResult<CollectionAllocationDetailDto>(null, "یافت نشد.");
 
-            q = q.ApplyFilters(opt.Filters);
-            if (!string.IsNullOrWhiteSpace(opt.Search))
+            var dto = new CollectionAllocationDetailDto
             {
-                var key = opt.Search.Trim();
-                q = q.Where(a => (a.Notes ?? "").Contains(key));
-            }
+                Id = e.Id,
+                CollectionId = e.CollectionId,
+                Kind = e.Kind,
+                Amount = e.Amount,
+                ContractId = e.ContractId,
+                ShopId = e.ShopId,
+                TenantId = e.TenantId,
+                MeterReadingId = e.MeterReadingId,
+                PeriodYear = e.PeriodYear,
+                PeriodMonth = e.PeriodMonth,
+                Notes = e.Notes,
+                CreatedByUserId = e.CreatedByUserId,
+                CreatedAtUtc = e.CreatedAtUtc
+            };
 
-            q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(a => a.Id);
-
-            var projected = from a in q
-                            join s in _shopDal.QueryNoTracking() on a.ShopId equals s.Id into shopj
-                            from sj in shopj.DefaultIfEmpty()
-                            join t in _tenantDal.QueryNoTracking() on a.TenantId equals t.Id into tenj
-                            from tj in tenj.DefaultIfEmpty()
-                            select new CollectionAllocationDetailDto
-                            {
-                                Id = a.Id,
-                                CollectionId = a.CollectionId,
-                                Kind = a.Kind.ToString(),
-                                Amount = a.Amount,
-                                ContractId = a.ContractId,
-                                ShopId = a.ShopId,
-                                TenantId = a.TenantId,
-                                MeterReadingId = a.MeterReadingId,
-                                PeriodYear = a.PeriodYear,
-                                PeriodMonth = a.PeriodMonth,
-                                Notes = a.Notes,
-                                ShopName = sj != null ? sj.Name : null,
-                                TenantName = tj != null ? tj.DisplayName : null
-                            };
-
-            var total = projected.Count();
-            var items = projected.ApplyPaging(opt.Page, opt.PageSize).ToList();
-
-            return new SuccessDataResult<PagedResult<CollectionAllocationDetailDto>>(
-                new PagedResult<CollectionAllocationDetailDto>
-                {
-                    Items = items,
-                    Page = opt.Page,
-                    PageSize = opt.PageSize,
-                    TotalCount = total
-                });
+            return new SuccessDataResult<CollectionAllocationDetailDto>(dto);
         }
 
-        [CacheAspect(10)]
-        public IDataResult<CollectionAllocationDetailDto> GetDetailById(Guid id)
+        [ValidationAspect(typeof(CollectionAllocationCreateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("ICollectionAllocationService.Get")]
+        public IResult Add(CollectionAllocationCreateDto dto, int userId)
         {
-            var dto = (from a in _allocationDal.QueryNoTracking().Where(x => x.Id == id)
-                       join s in _shopDal.QueryNoTracking() on a.ShopId equals s.Id into shopj
-                       from sj in shopj.DefaultIfEmpty()
-                       join t in _tenantDal.QueryNoTracking() on a.TenantId equals t.Id into tenj
-                       from tj in tenj.DefaultIfEmpty()
-                       select new CollectionAllocationDetailDto
-                       {
-                           Id = a.Id,
-                           CollectionId = a.CollectionId,
-                           Kind = a.Kind.ToString(),
-                           Amount = a.Amount,
-                           ContractId = a.ContractId,
-                           ShopId = a.ShopId,
-                           TenantId = a.TenantId,
-                           MeterReadingId = a.MeterReadingId,
-                           PeriodYear = a.PeriodYear,
-                           PeriodMonth = a.PeriodMonth,
-                           Notes = a.Notes,
-                           ShopName = sj != null ? sj.Name : null,
-                           TenantName = tj != null ? tj.DisplayName : null
-                       }).FirstOrDefault();
+            var e = new CollectionAllocation
+            {
+                Id = Guid.NewGuid(),
+                CollectionId = dto.CollectionId,
+                Kind = dto.Kind,
+                Amount = dto.Amount,
+                ContractId = dto.ContractId,
+                ShopId = dto.ShopId,
+                TenantId = dto.TenantId,
+                MeterReadingId = dto.MeterReadingId,
+                PeriodYear = dto.PeriodYear,
+                PeriodMonth = dto.PeriodMonth,
+                Notes = dto.Notes,
+                CreatedByUserId = userId,
+                CreatedAtUtc = DateTime.UtcNow
+            };
 
-            return dto == null ? new ErrorDataResult<CollectionAllocationDetailDto>(null, "یافت نشد.")
-                               : new SuccessDataResult<CollectionAllocationDetailDto>(dto);
+            _dal.Add(e);
+            return new SuccessResult("ثبت شد.");
         }
 
-        [SecuredOperation("collectionallocation.write,admin")]
-        [ValidationAspect(typeof(CollectionAllocationValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("ICollectionAllocationService.Get")]
-        public IResult Add(CollectionAllocation allocation)
+        [ValidationAspect(typeof(CollectionAllocationUpdateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("ICollectionAllocationService.Get")]
+        public IResult Update(CollectionAllocationUpdateDto dto, int userId)
         {
-            _allocationDal.Add(allocation);
-            return new SuccessResult("تخصیص ثبت شد.");
+            var e = _dal.Get(x => x.Id == dto.Id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+
+            e.Kind = dto.Kind;
+            e.Amount = dto.Amount;
+            e.ContractId = dto.ContractId;
+            e.ShopId = dto.ShopId;
+            e.TenantId = dto.TenantId;
+            e.MeterReadingId = dto.MeterReadingId;
+            e.PeriodYear = dto.PeriodYear;
+            e.PeriodMonth = dto.PeriodMonth;
+            e.Notes = dto.Notes;
+
+            _dal.Update(e);
+
+            return new SuccessResult("بروز شد.");
         }
 
-        [SecuredOperation("collectionallocation.write,admin")]
-        [ValidationAspect(typeof(CollectionAllocationValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("ICollectionAllocationService.Get")]
-        public IResult Update(CollectionAllocation allocation)
-        {
-            var current = _allocationDal.Get(x => x.Id == allocation.Id);
-            if (current == null) return new ErrorResult("یافت نشد.");
-
-            current.CollectionId = allocation.CollectionId;
-            current.Kind = allocation.Kind;
-            current.Amount = allocation.Amount;
-            current.ContractId = allocation.ContractId;
-            current.ShopId = allocation.ShopId;
-            current.TenantId = allocation.TenantId;
-            current.MeterReadingId = allocation.MeterReadingId;
-            current.PeriodYear = allocation.PeriodYear;
-            current.PeriodMonth = allocation.PeriodMonth;
-            current.Notes = allocation.Notes;
-
-            _allocationDal.Update(current);
-            return new SuccessResult("بروزرسانی شد.");
-        }
-
-        [SecuredOperation("collectionallocation.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("ICollectionAllocationService.Get")]
+        [TransactionScopeAspect, CacheRemoveAspect("ICollectionAllocationService.Get")]
         public IResult Delete(Guid id)
         {
-            var e = _allocationDal.Get(x => x.Id == id);
+            var e = _dal.Get(x => x.Id == id);
             if (e == null) return new ErrorResult("یافت نشد.");
-            _allocationDal.Delete(e);
+
+            if (e.AccrualSettlements.Any())
+                return new ErrorResult("به علت وجود تسویه، حذف ممکن نیست.");
+
+            _dal.Delete(e);
             return new SuccessResult("حذف شد.");
         }
     }

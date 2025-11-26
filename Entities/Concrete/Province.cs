@@ -1,8 +1,10 @@
 ﻿using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Entities.Concrete
@@ -19,11 +21,15 @@ namespace Entities.Concrete
 
         public bool IsActive { get; set; } = true;
 
-
-        // İLİN İLÇELERİ
+        // İlin İlçeleri
+        [JsonIgnore]
+        [ValidateNever]
         public ICollection<District> Districts { get; set; } = new List<District>();
 
-        // İLE BAĞLI ADRESLER
+        // İle Bağlı Adresler
+        [JsonIgnore]
+        [ValidateNever]
         public ICollection<Address> Addresses { get; set; } = new List<Address>();
     }
+
 }

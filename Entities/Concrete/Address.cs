@@ -1,23 +1,25 @@
 ﻿using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Runtime.ConstrainedExecution;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
     //    Adresi tek bir yerde yönetin(en pratik)
     //Her varlık için ayrı ayrı adres alanları yerine tek bir Address tablosu kullan, hangi varlığa ait olduğunu Owner alanlarıyla belirt:
-    public enum AddressOwnerType { Shop = 1, Tenant = 2, FranchiseOwner = 3, FamilyMember = 4 }
 
     public class Address : IEntity
     {
         public Guid Id { get; set; }
 
         // Sahiplik (polimorfik bağ)
-        public AddressOwnerType OwnerType { get; set; }
+        public MediaOwnerType OwnerType { get; set; }
         public Guid OwnerId { get; set; } // ShopId / TenantId / FranchiseOwnerId / FamilyMemberId
 
         // İl/İlçe
@@ -32,14 +34,20 @@ namespace Entities.Concrete
         public string? PostalCode { get; set; }
         public string? Notes { get; set; }
 
+        public string Line1 { get; set; } = null!;
+
         // Varsayılan adres flag’i (bir varlığın birden çok adresi olabilir)
         public bool IsPrimary { get; set; } = true;
 
-        // Nav (istenirse)
+        // Navigation
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ProvinceId))]
         public Province? Province { get; set; }
 
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(DistrictId))]
         public District? District { get; set; }
-
     }
-
 }

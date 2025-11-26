@@ -9,7 +9,6 @@ using Core.Entities;
 
 namespace Entities.Concrete
 {
-    //Aile Pay Kuralı(ebeveyn yüzdesi + cinsiyet ağırlıkları)
     public class FamilySharePolicy : IEntity
     {
         [Key] public Guid Id { get; set; }
@@ -25,17 +24,13 @@ namespace Entities.Concrete
         [Column(TypeName = "decimal(6,3)")]
         public decimal MaleWeight { get; set; } = 2.000m;
 
-        [Required] public DateOnly EffectiveFrom { get; set; }
-        public DateOnly? EffectiveTo { get; set; }
-
         [MaxLength(300)] public string? Notes { get; set; }
 
-        public void ValidateOrThrow()
-        {
-            if (ParentPercent < 0 || ParentPercent > 100)
-                throw new InvalidOperationException("ParentPercent 0–100 aralığında olmalı.");
-            if (FemaleWeight <= 0 || MaleWeight <= 0)
-                throw new InvalidOperationException("Ağırlıklar pozitif olmalı.");
-        }
+        [Required]
+        public DateOnly CreatedAtUtc { get; set; }
+
+        public int CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
     }
 }

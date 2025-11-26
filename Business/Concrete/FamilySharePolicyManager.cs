@@ -30,7 +30,7 @@ namespace Business.Concrete
         [CacheAspect(10)]
         public IDataResult<List<FamilySharePolicy>> GetAll()
             => new SuccessDataResult<List<FamilySharePolicy>>(
-                _dal.QueryNoTracking().OrderByDescending(x => x.EffectiveFrom).ToList()
+                _dal.QueryNoTracking().ToList()
             );
 
         [CacheAspect(10)]
@@ -55,8 +55,7 @@ namespace Business.Concrete
             }
 
             q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(x => x.EffectiveFrom);
+            if (!q.Expression.ToString()!.Contains("OrderBy"));
 
             var projected = q.Select(p => new FamilySharePolicyDetailDto
             {
@@ -64,8 +63,6 @@ namespace Business.Concrete
                 ParentPercent = p.ParentPercent,
                 FemaleWeight = p.FemaleWeight,
                 MaleWeight = p.MaleWeight,
-                EffectiveFrom = p.EffectiveFrom,
-                EffectiveTo = p.EffectiveTo,
                 Notes = p.Notes
             });
 
@@ -92,8 +89,6 @@ namespace Business.Concrete
                     ParentPercent = p.ParentPercent,
                     FemaleWeight = p.FemaleWeight,
                     MaleWeight = p.MaleWeight,
-                    EffectiveFrom = p.EffectiveFrom,
-                    EffectiveTo = p.EffectiveTo,
                     Notes = p.Notes
                 })
                 .FirstOrDefault();
@@ -107,16 +102,12 @@ namespace Business.Concrete
         public IDataResult<FamilySharePolicyDetailDto> GetActiveForDate(DateOnly onDate)
         {
             var dto = _dal.QueryNoTracking()
-                .Where(p => p.EffectiveFrom <= onDate && (!p.EffectiveTo.HasValue || p.EffectiveTo.Value >= onDate))
-                .OrderByDescending(p => p.EffectiveFrom)
                 .Select(p => new FamilySharePolicyDetailDto
                 {
                     Id = p.Id,
                     ParentPercent = p.ParentPercent,
                     FemaleWeight = p.FemaleWeight,
                     MaleWeight = p.MaleWeight,
-                    EffectiveFrom = p.EffectiveFrom,
-                    EffectiveTo = p.EffectiveTo,
                     Notes = p.Notes
                 }).FirstOrDefault();
 
@@ -134,10 +125,7 @@ namespace Business.Concrete
 
             // Çakışma koşulu (EF-çevirilebilir): 
             // [p.From, p.To]  ×  [from, to]  ⇔  (to == null || p.From <= to) && (p.To == null || p.To >= from)
-            return q.Any(p =>
-                (to == null || p.EffectiveFrom <= to.Value) &&
-                (p.EffectiveTo == null || p.EffectiveTo >= from)
-            );
+            return q.Any();
         }
 
 
@@ -147,11 +135,6 @@ namespace Business.Concrete
         [CacheRemoveAspect("IFamilySharePolicyService.Get")]
         public IResult Add(FamilySharePolicy policy)
         {
-            try { policy.ValidateOrThrow(); } catch (Exception ex) { return new ErrorResult(ex.Message); }
-
-            if (HasOverlap(policy.EffectiveFrom, policy.EffectiveTo))
-                return new ErrorResult("تداخل بازهٔ زمانی با سیاست‌های موجود.");
-
             _dal.Add(policy);
             return new SuccessResult("سیاست ثبت شد.");
         }
@@ -165,16 +148,9 @@ namespace Business.Concrete
             var current = _dal.Get(x => x.Id == policy.Id);
             if (current == null) return new ErrorResult("یافت نشد.");
 
-            try { policy.ValidateOrThrow(); } catch (Exception ex) { return new ErrorResult(ex.Message); }
-
-            if (HasOverlap(policy.EffectiveFrom, policy.EffectiveTo, policy.Id))
-                return new ErrorResult("تداخل بازهٔ زمانی با سیاست‌های موجود.");
-
             current.ParentPercent = policy.ParentPercent;
             current.FemaleWeight = policy.FemaleWeight;
             current.MaleWeight = policy.MaleWeight;
-            current.EffectiveFrom = policy.EffectiveFrom;
-            current.EffectiveTo = policy.EffectiveTo;
             current.Notes = policy.Notes;
 
             _dal.Update(current);
@@ -215,7 +191,7 @@ namespace Business.Concrete
             else
             {
                 // En son politika (EffectiveFrom en yeni)
-                var p = _dal.QueryNoTracking().OrderByDescending(x => x.EffectiveFrom).FirstOrDefault();
+                var p = _dal.QueryNoTracking().FirstOrDefault();
                 if (p == null) return new ErrorDataResult<object>(null, "هیچ سیاستی ثبت نشده است.");
                 policy = p;
             }

@@ -84,5 +84,40 @@ namespace WebAPI.Controllers
             var r = _service.Deactivate(id);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
+
+        [HttpGet("views/all")]
+        [AllowAnonymous]
+        public IActionResult GetAllOwnerView([FromQuery] bool? active)
+            => Ok(_service.GetAllOwnerView(active).Data);
+
+        [HttpGet("views")]
+        [AllowAnonymous]
+        public IActionResult GetOwnerViews([FromQuery] QueryOptions opt, [FromQuery] bool? active)
+        {
+            var r = _service.GetOwnerViews(opt, active);
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
+        }
+
+        // GET: /api/FranchiseOwners/{ownerId}/profile
+        [HttpGet("{ownerId:guid}/profile")]
+        [AllowAnonymous] // okuma uçları gibi anonim bırakmak istersen
+        public IActionResult GetProfile([FromRoute] Guid ownerId)
+        {
+            var result = _service.GetProfile(ownerId);
+
+            if (!result.Success)
+            {
+                // Service "yok" için ErrorDataResult döndürüyorsa 404 daha doğru
+                // (Manager.GetProfile içinde "یافت نشد." ile dönüyorsun)
+                return NotFound(result.Message ?? "Not found.");
+            }
+
+            if (result.Data == null)
+                return NotFound("Not found.");
+
+            return Ok(result.Data);
+        }
+
+
     }
 }

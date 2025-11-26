@@ -2,6 +2,8 @@
 using Entities.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace WebAPI.Controllers
 {
@@ -39,6 +41,38 @@ namespace WebAPI.Controllers
 
             var tokenResult = _authService.CreateAccessToken(userToLogin.Data);
             return tokenResult.Success ? Ok(tokenResult.Data) : BadRequest(tokenResult.Message);
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public IActionResult Me()
+        {
+            var user = HttpContext.User;
+
+            var id = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                     ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            var email = user.FindFirst(ClaimTypes.Email)?.Value;
+            var fullName = user.FindFirst(ClaimTypes.Name)?.Value;
+
+            string? firstName = null, lastName = null;
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                firstName = parts.FirstOrDefault();
+                lastName = parts.Length > 1 ? string.Join(' ', parts.Skip(1)) : null;
+            }
+
+            var roles = user.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+
+            return Ok(new
+            {
+                id,
+                email,
+                firstName,
+                lastName,
+                roles
+            });
         }
     }
 }

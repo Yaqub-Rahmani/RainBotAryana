@@ -1,17 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Core.Entities;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //    FamilyBalanceEntry(Aile üyesi bakiyesi hareketi)
-    //Aile havuzundan üyelere dağıtılan tutarlar giriş; üye parayı çektiğinde çıkış.
-    public class FamilyBalanceEntry: IEntity
+    // FamilyBalanceEntry (Aile üyesi bakiyesi hareketi)
+    // Aile havuzundan üyelere dağıtılan tutarlar giriş; üye parayı çektiğinde çıkış.
+    public class FamilyBalanceEntry : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -35,5 +33,30 @@ namespace Entities.Concrete
 
         [MaxLength(300)]
         public string? Notes { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(FamilyMemberId))]
+        public FamilyMember FamilyMember { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(FamilyPayoutId))]
+        public FamilyPayout? FamilyPayout { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(OwnerDistributionId))]
+        public OwnerDistribution? OwnerDistribution { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(CollectionId))]
+        public Collection? Collection { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ContractId))]
+        public Contract? Contract { get; set; }
     }
 }

@@ -7,87 +7,68 @@ using System.Runtime.ConstrainedExecution;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 
 namespace Entities.Concrete
 {
     //    (MeterReading) ile devam ediyorum.Bu entity, her dükkân için aylık tüketimi ve %10 rezerv hesabını standartlaştırır.
     //3) Elektrik – MeterReading
-    public class MeterReading: IEntity
+    public class MeterReading : IEntity
     {
-        [Key]
-        public Guid Id { get; set; }
+        [Key] public Guid Id { get; set; }
 
-        /// <summary>Dükkân (Shop) referansı</summary>
-        [Required]
-        public Guid ShopId { get; set; }
+        [Required] public Guid ShopId { get; set; }
+        [Required] public Guid ContractId { get; set; }
 
-        // --- Dönem (Aylık Kayıt) ---
-        /// <summary>Yıl (örn. 2025)</summary>
-        [Range(2000, 2100)]
-        public int Year { get; set; }
+        [Range(1300, 1500)] public int Year { get; set; }
+        [Range(1, 12)] public int Month { get; set; }
 
-        /// <summary>Ay (1-12)</summary>
-        [Range(1, 12)]
-        public int Month { get; set; }
+        [Required] public DateOnly ReadingDate { get; set; }
 
-        /// <summary>Okumanın yapıldığı tarih (raporlama için)</summary>
-        public DateOnly ReadingDate { get; set; }
+        // Audit
+        public int? CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }              // NEW (zorunlu)
+        public DateTimeOffset? UpdatedAt { get; set; }             // CHANGED: DateOnly -> DateTimeOffset
 
-        // --- Sayaç Endeksleri (kWh) ---
-        /// <summary>Önceki endeks</summary>
-        [Column(TypeName = "decimal(18,3)")]
-        public decimal PreviousIndex { get; set; }
+        // Sayaç endeksleri
+        [Precision(18, 3)] public decimal PreviousIndex { get; set; }
+        [Precision(18, 3)] public decimal CurrentIndex { get; set; }
 
-        /// <summary>Şimdiki endeks</summary>
-        [Column(TypeName = "decimal(18,3)")]
-        public decimal CurrentIndex { get; set; }
+        [NotMapped] public decimal ConsumptionKwh => Math.Max(0, CurrentIndex - PreviousIndex);
 
-        /// <summary>Tüketim (kWh) = CurrentIndex - PreviousIndex (sadece görüntü amaçlı)</summary>
-        [NotMapped]
-        public decimal ConsumptionKwh => Math.Max(0, CurrentIndex - PreviousIndex);
+        // Fiyat & tutarlar
+        [Precision(18, 4)] public decimal UnitPrice { get; set; }
 
-        // --- Fiyat & Tutarlar ---
-        /// <summary>Birim fiyat (kWh başına)</summary>
-        [Column(TypeName = "decimal(18,4)")]
-        public decimal UnitPrice { get; set; }
+        [NotMapped] public decimal NetAmount => Math.Round(ConsumptionKwh * UnitPrice, 2, MidpointRounding.AwayFromZero);
 
-        /// <summary>Net tutar = ConsumptionKwh * UnitPrice (rezerv hariç)</summary>
-        [NotMapped]
-        public decimal NetAmount => Math.Round(ConsumptionKwh * UnitPrice, 2, MidpointRounding.AwayFromZero);
-
-        /// <summary>Rezerv oranı (varsayılan %10)</summary>
-        [Column(TypeName = "decimal(5,4)")]
+        [Precision(5, 4), Range(0, 1)]
         public decimal ReserveRate { get; set; } = 0.10m;
 
-        /// <summary>Rezerv tutarı = NetAmount * ReserveRate</summary>
-        [NotMapped]
-        public decimal ReserveAmount => Math.Round(NetAmount * ReserveRate, 2, MidpointRounding.AwayFromZero);
+        [NotMapped] public decimal ReserveAmount => Math.Round(NetAmount * ReserveRate, 2, MidpointRounding.AwayFromZero);
+        [NotMapped] public decimal TotalBilled => NetAmount + ReserveAmount;
 
-        /// <summary>Faturalandırılacak toplam = NetAmount + ReserveAmount</summary>
-        [NotMapped]
-        public decimal TotalBilled => NetAmount + ReserveAmount;
+        [MaxLength(500)] public string? Notes { get; set; }
 
-        // --- Durum / Kanıt ---
-        /// <summary>Opsiyonel açıklama/nota alanı</summary>
-        [MaxLength(500)]
-        public string? Notes { get; set; }
-
-        /// <summary>Ay kapandı mı (artık değiştirme yapma niyeti yok)</summary>
+        // İş akışı
         public bool IsFinalized { get; set; }
+        public int? FinalizedByUserId { get; set; }              // NEW
+        public DateTimeOffset? FinalizedAt { get; set; }          // NEW
 
-        // Nav
-        public Shop? Shop { get; set; }
+        [Timestamp] public byte[] RowVersion { get; set; } = Array.Empty<byte>(); // NEW
 
+        // Navigation
+        [JsonIgnore, ValidateNever, ForeignKey(nameof(ShopId))]
+        public Shop Shop { get; set; } = null!;
 
-        /// <summary>Basit alan doğrulaması</summary>
-        //public void ValidateOrThrow()
-        //{
-        //    if (CurrentIndex < PreviousIndex)
-        //        throw new InvalidOperationException("CurrentIndex, PreviousIndex’ten küçük olamaz.");
-        //    if (UnitPrice < 0)
-        //        throw new InvalidOperationException("UnitPrice negatif olamaz.");
-        //    if (ReserveRate < 0)
-        //        throw new InvalidOperationException("ReserveRate negatif olamaz.");
-        //}
+        [JsonIgnore, ValidateNever, ForeignKey(nameof(ContractId))]
+        public Contract Contract { get; set; } = null!;
+
+        [JsonIgnore, ValidateNever] public ICollection<Accrual> Accruals { get; set; } = new List<Accrual>();
+        [JsonIgnore, ValidateNever] public ICollection<CollectionAllocation> Allocations { get; set; } = new List<CollectionAllocation>();
+        [JsonIgnore, ValidateNever] public ICollection<ReserveEntry> ReserveEntries { get; set; } = new List<ReserveEntry>();
+
     }
 }

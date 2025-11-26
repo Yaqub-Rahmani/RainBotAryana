@@ -6,13 +6,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
     //    FamilyPayout & FamilyPayoutLine(Aile havuzunun paylaştırılması)
     //Aile havuzundaki tutarın, İslami pay kuralına göre üyelere dağıtıldığı olay(ve satırları).
     //Business pay hesabını yapar; burada kayıt altına alınır.
-    public class FamilyPayout: IEntity
+    public class FamilyPayout : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -31,6 +33,17 @@ namespace Entities.Concrete
 
         public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
 
-        public ICollection<FamilyPayoutLine> Lines { get; set; } = new List<FamilyPayoutLine>();
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(OwnerDistributionId))]
+        public OwnerDistribution OwnerDistribution { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FamilyPayoutLine> FamilyPayoutLines { get; set; } = new List<FamilyPayoutLine>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FamilyBalanceEntry> FamilyBalanceEntries { get; set; } = new List<FamilyBalanceEntry>();
     }
 }

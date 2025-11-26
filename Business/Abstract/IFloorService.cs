@@ -13,18 +13,14 @@ namespace Business.Abstract
 {
     public interface IFloorService
     {
-        // Okumalar
-        IDataResult<List<Floor>> GetAll(Guid? marketId = null, bool? status = null);
+        IDataResult<List<Floor>> GetAll(bool? onlyActive = null);
         IDataResult<Floor> GetById(Guid id);
-        IDataResult<PagedResult<FloorDetailDto>> GetDetails(QueryOptions opt, Guid? marketId = null, bool? status = null);
+        IDataResult<PagedResult<FloorDetailDto>> GetDetails(QueryOptions opt, Guid? marketId = null);
         IDataResult<FloorDetailDto> GetDetailById(Guid id);
 
-        // Yazmalar
         IResult Add(Floor floor);
         IResult Update(Floor floor);
         IResult Delete(Guid id);
-
-        // İşlemsel
         IResult Activate(Guid id);
         IResult Deactivate(Guid id);
     }

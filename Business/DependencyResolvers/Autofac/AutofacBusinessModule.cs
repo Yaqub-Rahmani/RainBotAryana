@@ -4,7 +4,9 @@ using Business.Abstract;
 using Business.Concrete;
 using Business.Security.Jwt;
 using Castle.DynamicProxy;
+using Core.Utilities.Files;
 using Core.Utilities.Interceptors;
+using Core.Utilities.KabulDateTime;
 using Core.Utilities.Security.Jwt;
 using DataAccess.Abstract;
 using DataAccess.Concrete.EntityFramework;
@@ -20,6 +22,32 @@ namespace Business.DependencyResolvers.Autofac
     {
         protected override void Load(ContainerBuilder builder)
         {
+
+            builder.RegisterType<FingerprintManager>().As<IFingerprintService>().InstancePerLifetimeScope();
+
+            builder.RegisterType<KabulTimeProvider>()
+                   .As<ITimeProvider>()
+                   .SingleInstance();
+
+            // 🔹 Dosya yolu servisi (IPathProvider'a bağımlı)
+            builder.RegisterType<FilePathManager>()
+                   .As<IFilePathService>()
+                   .SingleInstance();
+
+            // 🔹 Görsel kaydetme servisi
+            builder.RegisterType<ImageStorageManager>()
+                   .As<IImageStorageService>()
+                   .InstancePerLifetimeScope();
+
+            // 🔹 Genel dosya yükleme (FormData) servisi
+            builder.RegisterType<FileStorageManager>()
+                   .As<IFileStorageService>()
+                   .InstancePerLifetimeScope();
+
+
+            builder.RegisterType<EfFranchiseOwnerBalanceDal>().As<IFranchiseOwnerBalanceDal>().InstancePerLifetimeScope();
+            builder.RegisterType<FranchiseOwnerBalanceManager>().As<IFranchiseOwnerBalanceService>().InstancePerLifetimeScope();
+
             builder.RegisterType<EfAccrualDal>().As<IAccrualDal>().InstancePerLifetimeScope();
             builder.RegisterType<AccrualManager>().As<IAccrualService>().InstancePerLifetimeScope();
 
@@ -107,9 +135,25 @@ namespace Business.DependencyResolvers.Autofac
             builder.RegisterType<EfTenantDal>().As<ITenantDal>().InstancePerLifetimeScope();
             builder.RegisterType<TenantManager>().As<ITenantService>().InstancePerLifetimeScope();
 
+            builder.RegisterType<EfBiometricDal>().As<IBiometricDal>().InstancePerLifetimeScope();
+            builder.RegisterType<BiometricManager>().As<IBiometricService>().InstancePerLifetimeScope();
 
+            builder.RegisterType<EfPhoneDal>().As<IPhoneDal>().InstancePerLifetimeScope();
+            builder.RegisterType<PhoneManager>().As<IPhoneService>().InstancePerLifetimeScope();
 
+            builder.RegisterType<EfMediaAssetDal>().As<IMediaAssetDal>().InstancePerLifetimeScope();
+            builder.RegisterType<MediaAssetManager>().As<IMediaAssetService>().InstancePerLifetimeScope();
 
+            builder.RegisterType<TaxPaymentEntryManager>().As<ITaxPaymentEntryService>().InstancePerLifetimeScope();
+            builder.RegisterType<EfTaxPaymentEntryDal>().As<ITaxPaymentEntryDal>().InstancePerLifetimeScope();
+
+            // ZakatPaymentEntry
+            builder.RegisterType<ZakatPaymentEntryManager>().As<IZakatPaymentEntryService>().InstancePerLifetimeScope();
+            builder.RegisterType<EfZakatPaymentEntryDal>().As<IZakatPaymentEntryDal>().InstancePerLifetimeScope();
+
+            // CharityPaymentEntry
+            builder.RegisterType<CharityPaymentEntryManager>().As<ICharityPaymentEntryService>().InstancePerLifetimeScope();
+            builder.RegisterType<EfCharityPaymentEntryDal>().As<ICharityPaymentEntryDal>().InstancePerLifetimeScope();
 
 
 
@@ -118,12 +162,6 @@ namespace Business.DependencyResolvers.Autofac
 
 
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-            builder.RegisterType<EfProductDal>().As<IProductDal>().InstancePerLifetimeScope();
-            builder.RegisterType<ProductManager>().As<IProductService>().InstancePerLifetimeScope();
-
-            builder.RegisterType<CategoryManager>().As<ICategoryService>().InstancePerLifetimeScope();
-            builder.RegisterType<EfCategoryDal>().As<ICategoryDal>().InstancePerLifetimeScope();
 
 
             builder.RegisterType<UserManager>().As<IUserService>().InstancePerLifetimeScope();

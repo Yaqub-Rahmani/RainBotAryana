@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
@@ -15,7 +17,7 @@ namespace Entities.Concrete
     //“Geçen ayın borcu bu ay ödendi” senaryosu net görünür,
     //Kısmi kapanışlar detaylı izlenir,
     //Raporlamada “hangi tahsilat hangi borcu kapattı?” sorusu kolay cevaplanır.
-    public class AccrualSettlement: IEntity
+    public class AccrualSettlement : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -32,6 +34,8 @@ namespace Entities.Concrete
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 
+        public int SettledByUserId { get; set; }
+
         /// <summary>Eşleştirme zamanı</summary>
         public DateTime SettledAtUtc { get; set; } = DateTime.UtcNow;
 
@@ -39,8 +43,16 @@ namespace Entities.Concrete
         [MaxLength(300)]
         public string? Notes { get; set; }
 
-        // Nav
-        public CollectionAllocation? CollectionAllocation { get; set; }
-        public Accrual? Accrual { get; set; }
+        // Navigation
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(CollectionAllocationId))]
+        public CollectionAllocation CollectionAllocation { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(AccrualId))]
+        public Accrual Accrual { get; set; } = null!;
     }
+
 }

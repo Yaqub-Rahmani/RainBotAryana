@@ -4,18 +4,13 @@ using Business.ValidationRules.FluentValidation;
 using Core.Aspects.Autofac.Caching;
 using Core.Aspects.Autofac.Transaction;
 using Core.Aspects.Autofac.Validation;
+using Core.Extensions;
 using Core.Utilities.Paging;
 using Core.Utilities.Query;
 using Core.Utilities.Results;
 using DataAccess.Abstract;
 using Entities.Concrete;
 using Entities.Dtos;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Core.Extensions;
 
 namespace Business.Concrete
 {
@@ -30,117 +25,98 @@ namespace Business.Concrete
             _marketDal = marketDal;
         }
 
-        // ---------- Okumalar ----------
         [CacheAspect(10)]
-        public IDataResult<List<Floor>> GetAll(Guid? marketId = null, bool? status = null)
+        public IDataResult<List<Floor>> GetAll(bool? onlyActive = null)
         {
             var q = _floorDal.QueryNoTracking();
-            if (marketId.HasValue && marketId.Value != Guid.Empty)
-                q = q.Where(x => x.MarketId == marketId.Value);
-            if (status.HasValue)
-                q = q.Where(x => x.Status == status.Value);
-
-            var list = q.OrderByDescending(x => x.Status).ThenBy(x => x.Level).ThenBy(x => x.FloorName).ToList();
-            return new SuccessDataResult<List<Floor>>(list);
+            if (onlyActive == true) q = q.Where(f => f.Status);
+            return new SuccessDataResult<List<Floor>>(q.ToList());
         }
 
         [CacheAspect(10)]
         public IDataResult<Floor> GetById(Guid id)
         {
-            var e = _floorDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
-            return e == null ? new ErrorDataResult<Floor>(null, "یافت نشد.") : new SuccessDataResult<Floor>(e);
+            var e = _floorDal.QueryNoTracking().FirstOrDefault(f => f.Id == id);
+            return e == null
+                ? new ErrorDataResult<Floor>(null, "یافت نشد.")
+                : new SuccessDataResult<Floor>(e);
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<FloorDetailDto>> GetDetails(QueryOptions opt, Guid? marketId = null, bool? status = null)
+        public IDataResult<PagedResult<FloorDetailDto>> GetDetails(QueryOptions opt, Guid? marketId = null)
         {
             opt ??= new QueryOptions();
             var q = _floorDal.QueryNoTracking();
 
-            if (marketId.HasValue && marketId.Value != Guid.Empty)
-                q = q.Where(x => x.MarketId == marketId.Value);
-            if (status.HasValue)
-                q = q.Where(x => x.Status == status.Value);
+            if (marketId.HasValue)
+                q = q.Where(f => f.MarketId == marketId.Value);
 
             q = q.ApplyFilters(opt.Filters);
-
             if (!string.IsNullOrWhiteSpace(opt.Search))
             {
                 var key = opt.Search.Trim();
-                q = q.Where(x => x.FloorName.Contains(key));
+                q = q.Where(f => f.FloorName.Contains(key) || f.Market.MarketName.Contains(key));
             }
 
             q = q.ApplySort(opt.Sort);
             if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(x => x.Status).ThenBy(x => x.Level);
+                q = q.OrderBy(f => f.Level);
 
-            // Market adını getir
-            var markets = _marketDal.QueryNoTracking();
-            var projected = from f in q
-                            join m in markets on f.MarketId equals m.Id
-                            select new FloorDetailDto
-                            {
-                                Id = f.Id,
-                                MarketId = f.MarketId,
-                                MarketName = m.MarketName,
-                                FloorName = f.FloorName,
-                                Level = f.Level,
-                                Status = f.Status
-                            };
+            var projected = q.Select(f => new FloorDetailDto
+            {
+                Id = f.Id,
+                FloorName = f.FloorName,
+                Level = f.Level,
+                Status = f.Status,
+                MarketId = f.MarketId,
+                MarketName = f.Market.MarketName
+            });
 
             var total = projected.Count();
             var items = projected.ApplyPaging(opt.Page, opt.PageSize).ToList();
 
-            return new SuccessDataResult<PagedResult<FloorDetailDto>>(
-                new PagedResult<FloorDetailDto>
-                {
-                    Items = items,
-                    Page = opt.Page,
-                    PageSize = opt.PageSize,
-                    TotalCount = total
-                });
+            return new SuccessDataResult<PagedResult<FloorDetailDto>>(new PagedResult<FloorDetailDto>
+            {
+                Items = items,
+                Page = opt.Page,
+                PageSize = opt.PageSize,
+                TotalCount = total
+            });
         }
 
         [CacheAspect(10)]
         public IDataResult<FloorDetailDto> GetDetailById(Guid id)
         {
-            var dto = (from f in _floorDal.QueryNoTracking().Where(x => x.Id == id)
-                       join m in _marketDal.QueryNoTracking() on f.MarketId equals m.Id
-                       select new FloorDetailDto
-                       {
-                           Id = f.Id,
-                           MarketId = f.MarketId,
-                           MarketName = m.MarketName,
-                           FloorName = f.FloorName,
-                           Level = f.Level,
-                           Status = f.Status
-                       }).FirstOrDefault();
+            var dto = _floorDal.QueryNoTracking()
+                .Where(f => f.Id == id)
+                .Select(f => new FloorDetailDto
+                {
+                    Id = f.Id,
+                    FloorName = f.FloorName,
+                    Level = f.Level,
+                    Status = f.Status,
+                    MarketId = f.MarketId,
+                    MarketName = f.Market.MarketName
+                }).FirstOrDefault();
 
-            return dto == null ? new ErrorDataResult<FloorDetailDto>(null, "یافت نشد.")
-                               : new SuccessDataResult<FloorDetailDto>(dto);
+            return dto == null
+                ? new ErrorDataResult<FloorDetailDto>(null, "یافت نشد.")
+                : new SuccessDataResult<FloorDetailDto>(dto);
         }
 
-        // ---------- Yazmalar ----------
+        // ---------- Write operations ----------
+
         [SecuredOperation("floor.write,admin")]
         [ValidationAspect(typeof(FloorValidator))]
         [TransactionScopeAspect]
         [CacheRemoveAspect("IFloorService.Get")]
         public IResult Add(Floor floor)
         {
-            if (_marketDal.Get(x => x.Id == floor.MarketId) == null)
+            if (_marketDal.Get(m => m.Id == floor.MarketId) == null)
                 return new ErrorResult("بازار یافت نشد.");
 
-            // Aynı markette aynı kat adı var mı?
-            var nameDup = _floorDal.Get(x => x.MarketId == floor.MarketId &&
-                                             x.FloorName.ToLower() == floor.FloorName.ToLower());
-            if (nameDup != null) return new ErrorResult("نام طبقه در این بازار تکراری است.");
-
-            // Aynı markette aynı seviye var mı?
-            var levelDup = _floorDal.Get(x => x.MarketId == floor.MarketId && x.Level == floor.Level);
-            if (levelDup != null) return new ErrorResult("سطح طبقه در این بازار تکراری است.");
-
             _floorDal.Add(floor);
-            return new SuccessResult("طبقه اضافه شد.");
+            return new SuccessResult("طبقه با موفقیت اضافه شد.");
         }
 
         [SecuredOperation("floor.write,admin")]
@@ -149,30 +125,16 @@ namespace Business.Concrete
         [CacheRemoveAspect("IFloorService.Get")]
         public IResult Update(Floor floor)
         {
-            var current = _floorDal.Get(x => x.Id == floor.Id);
+            var current = _floorDal.Get(f => f.Id == floor.Id);
             if (current == null) return new ErrorResult("یافت نشد.");
 
-            if (_marketDal.Get(x => x.Id == floor.MarketId) == null)
-                return new ErrorResult("بازار یافت نشد.");
-
-            // Çakışma kontrolleri (kendisi hariç)
-            var nameDup = _floorDal.Get(x => x.Id != floor.Id &&
-                                             x.MarketId == floor.MarketId &&
-                                             x.FloorName.ToLower() == floor.FloorName.ToLower());
-            if (nameDup != null) return new ErrorResult("نام طبقه در این بازار تکراری است.");
-
-            var levelDup = _floorDal.Get(x => x.Id != floor.Id &&
-                                              x.MarketId == floor.MarketId &&
-                                              x.Level == floor.Level);
-            if (levelDup != null) return new ErrorResult("سطح طبقه در این بازار تکراری است.");
-
-            current.MarketId = floor.MarketId;
             current.FloorName = floor.FloorName;
             current.Level = floor.Level;
             current.Status = floor.Status;
+            current.MarketId = floor.MarketId;
 
             _floorDal.Update(current);
-            return new SuccessResult("طبقه بروزرسانی شد.");
+            return new SuccessResult("به‌روزرسانی انجام شد.");
         }
 
         [SecuredOperation("floor.write,admin")]
@@ -180,10 +142,10 @@ namespace Business.Concrete
         [CacheRemoveAspect("IFloorService.Get")]
         public IResult Delete(Guid id)
         {
-            var e = _floorDal.Get(x => x.Id == id);
+            var e = _floorDal.Get(f => f.Id == id);
             if (e == null) return new ErrorResult("یافت نشد.");
             _floorDal.Delete(e);
-            return new SuccessResult("حذف شد.");
+            return new SuccessResult("حذف انجام شد.");
         }
 
         [SecuredOperation("floor.write,admin")]
@@ -191,7 +153,7 @@ namespace Business.Concrete
         [CacheRemoveAspect("IFloorService.Get")]
         public IResult Activate(Guid id)
         {
-            var e = _floorDal.Get(x => x.Id == id);
+            var e = _floorDal.Get(f => f.Id == id);
             if (e == null) return new ErrorResult("یافت نشد.");
             e.Status = true;
             _floorDal.Update(e);
@@ -203,7 +165,7 @@ namespace Business.Concrete
         [CacheRemoveAspect("IFloorService.Get")]
         public IResult Deactivate(Guid id)
         {
-            var e = _floorDal.Get(x => x.Id == id);
+            var e = _floorDal.Get(f => f.Id == id);
             if (e == null) return new ErrorResult("یافت نشد.");
             e.Status = false;
             _floorDal.Update(e);

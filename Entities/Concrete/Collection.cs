@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
@@ -16,12 +18,18 @@ namespace Entities.Concrete
 
     public enum PaymentMethod
     {
-        Cash = 1,        // Nakit
-        BankTransfer = 2,// Havale/EFT
-        Pos = 3          // POS/kart vb. (isterseniz genişletilir)
-    }
+        //Cash = 1,        // Nakit
+        //BankTransfer = 2,// Havale/EFT
+        //Pos = 3          // POS/kart vb. (isterseniz genişletilir)
 
-    public class Collection: IEntity
+        Unknown = 0,
+        Cash = 1,
+        BankTransfer = 2,
+        Pos = 3,
+        Cheque = 4,
+        Other = 9
+    }
+    public class Collection : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -34,40 +42,94 @@ namespace Entities.Concrete
         [Required]
         public Guid ShopId { get; set; }
 
-        /// <summary>O an geçerli sözleşme (versiyon). Ayırt edilebilirlik için tutarız.</summary>
+        /// <summary>O an geçerli sözleşme (versiyon)</summary>
         [Required]
         public Guid ContractId { get; set; }
 
         /// <summary>Ödeme tarihi (fiili tahsilat günü)</summary>
         [Required]
         public DateTime PaidAtUtc { get; set; } = DateTime.UtcNow;
+        public int CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
 
-        /// <summary>Toplam alınan tutar (kuruş duyarlılığı)</summary>
+        public int? ApprovedByUserId { get; set; }
+        public DateTime? ApprovedAtUtc { get; set; }
+
+        public bool IsApproved { get; set; }
+
         [Column(TypeName = "decimal(18,2)")]
         public decimal AmountReceived { get; set; }
 
-        /// <summary>Ödeme yöntemi (nakit/havale/pos)</summary>
+        /// <summary>Ödeme yöntemi</summary>
         [Required]
         public PaymentMethod Method { get; set; }
 
-        /// <summary>Banka dekont no / POS slip no / makbuz no (opsiyonel)</summary>
+        /// <summary>Banka/POS/makbuz referansı</summary>
         [MaxLength(100)]
         public string? ReferenceNo { get; set; }
 
-        /// <summary>Bu ödemenin kapatmayı hedeflediği dönem (ör. geçmiş ay borcu)</summary>
-        public int? TargetYear { get; set; }   // örn. 2025
-        public int? TargetMonth { get; set; }  // 1–12
+        public Guid? MoneyEntryId { get; set; }
 
-        /// <summary>Açıklama/not</summary>
+        /// <summary>Hedeflenen dönem</summary>
+        [Range(1300, 1500)]
+        public int? TargetYear { get; set; }
+
+        [Range(1, 12)]
+        public int? TargetMonth { get; set; } 
+
+        /// <summary>Açıklama</summary>
         [MaxLength(500)]
         public string? Notes { get; set; }
 
-        // Nav
-        public Tenant? Tenant { get; set; }
-        public Shop? Shop { get; set; }
-        public Contract? Contract { get; set; }
+        // Navigation
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(TenantId))]
+        public Tenant Tenant { get; set; } = null!;
 
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ShopId))]
+        public Shop Shop { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ContractId))]
+        public Contract Contract { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
         public ICollection<CollectionAllocation> Allocations { get; set; } = new List<CollectionAllocation>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FamilyBalanceEntry> FamilyBalanceEntries { get; set; } = new List<FamilyBalanceEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FranchiseBalanceEntry> FranchiseBalanceEntries { get; set; } = new List<FranchiseBalanceEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<ReserveEntry> ReserveEntries { get; set; } = new List<ReserveEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<OwnerDistribution> OwnerDistributions { get; set; } = new List<OwnerDistribution>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<TaxPaymentEntry> TaxPayments { get; set; } = new List<TaxPaymentEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<ZakatPaymentEntry> ZakatPayments { get; set; } = new List<ZakatPaymentEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<CharityPaymentEntry> CharityPayments { get; set; } = new List<CharityPaymentEntry>();
+
 
     }
 }

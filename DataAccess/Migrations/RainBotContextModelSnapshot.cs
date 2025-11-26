@@ -34,19 +34,16 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("ContractId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ContractId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Kind")
                         .HasColumnType("int");
 
                     b.Property<Guid?>("MeterReadingId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("MeterReadingId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Month")
@@ -62,17 +59,17 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("ShopId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ShopId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("TenantId1")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Year")
                         .HasColumnType("int");
@@ -81,22 +78,14 @@ namespace DataAccess.Migrations
 
                     b.HasIndex("ContractId");
 
-                    b.HasIndex("ContractId1");
-
                     b.HasIndex("MeterReadingId");
-
-                    b.HasIndex("MeterReadingId1");
-
-                    b.HasIndex("ShopId1");
 
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("TenantId1");
-
-                    b.HasIndex("ShopId", "TenantId", "ContractId", "Kind", "Year", "Month")
+                    b.HasIndex("ShopId", "TenantId", "ContractId", "Year", "Month", "Kind")
                         .IsUnique();
 
-                    b.ToTable("Accruals", (string)null);
+                    b.ToTable("Accruals");
                 });
 
             modelBuilder.Entity("Entities.Concrete.AccrualSettlement", b =>
@@ -108,16 +97,10 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("AccrualId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AccrualId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid>("CollectionAllocationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("CollectionAllocationId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Notes")
@@ -127,18 +110,17 @@ namespace DataAccess.Migrations
                     b.Property<DateTime>("SettledAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("SettledByUserId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("AccrualId1");
-
                     b.HasIndex("CollectionAllocationId");
-
-                    b.HasIndex("CollectionAllocationId1");
 
                     b.HasIndex("AccrualId", "CollectionAllocationId")
                         .IsUnique();
 
-                    b.ToTable("AccrualSettlements", (string)null);
+                    b.ToTable("AccrualSettlements");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Address", b =>
@@ -148,8 +130,7 @@ namespace DataAccess.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("BuildingNo")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("DistrictId")
                         .HasColumnType("int");
@@ -157,13 +138,15 @@ namespace DataAccess.Migrations
                     b.Property<bool>("IsPrimary")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Line1")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Neighborhood")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uniqueidentifier");
@@ -172,19 +155,17 @@ namespace DataAccess.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("PostalCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ProvinceId")
                         .HasColumnType("int");
 
                     b.Property<string>("Street")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("UnitNo")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -194,25 +175,113 @@ namespace DataAccess.Migrations
 
                     b.HasIndex("OwnerType", "OwnerId", "IsPrimary");
 
-                    b.ToTable("Addresses", (string)null);
+                    b.ToTable("Addresses");
                 });
 
-            modelBuilder.Entity("Entities.Concrete.Category", b =>
+            modelBuilder.Entity("Entities.Concrete.Biometric", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OwnerType")
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<Guid?>("RelatedMediaAssetId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("CategoryName")
+                    b.Property<byte[]>("Template")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("Name");
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Categories");
+                    b.ToTable("Biometrics", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.Concrete.CharityPaymentEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("CollectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("MoneyEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<Guid?>("OwnerDistributionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("OwnerDistributionId", "OccurredAtUtc");
+
+                    b.ToTable("CharityPaymentEntries", (string)null);
                 });
 
             modelBuilder.Entity("Entities.Concrete.Collection", b =>
@@ -224,14 +293,26 @@ namespace DataAccess.Migrations
                     b.Property<decimal>("AmountReceived")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("ContractId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ContractId1")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsApproved")
+                        .HasColumnType("bit");
 
                     b.Property<int>("Method")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("MoneyEntryId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
@@ -247,9 +328,6 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("ShopId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ShopId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<int?>("TargetMonth")
                         .HasColumnType("int");
 
@@ -259,24 +337,21 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("TenantId1")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ContractId");
 
-                    b.HasIndex("ContractId1");
-
-                    b.HasIndex("ShopId1");
+                    b.HasIndex("ShopId");
 
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("TenantId1");
-
-                    b.HasIndex("ShopId", "TenantId", "ContractId", "PaidAtUtc");
-
-                    b.ToTable("Collections", (string)null);
+                    b.ToTable("Collections");
                 });
 
             modelBuilder.Entity("Entities.Concrete.CollectionAllocation", b =>
@@ -291,22 +366,19 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("CollectionId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("CollectionId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ContractId1")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Kind")
                         .HasColumnType("int");
 
                     b.Property<Guid?>("MeterReadingId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("MeterReadingId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Notes")
@@ -322,38 +394,22 @@ namespace DataAccess.Migrations
                     b.Property<Guid?>("ShopId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ShopId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("TenantId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CollectionId1");
+                    b.HasIndex("CollectionId");
 
                     b.HasIndex("ContractId");
 
-                    b.HasIndex("ContractId1");
-
                     b.HasIndex("MeterReadingId");
-
-                    b.HasIndex("MeterReadingId1");
 
                     b.HasIndex("ShopId");
 
-                    b.HasIndex("ShopId1");
-
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("TenantId1");
-
-                    b.HasIndex("CollectionId", "Kind");
-
-                    b.ToTable("CollectionAllocations", (string)null);
+                    b.ToTable("CollectionAllocations");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Contract", b =>
@@ -366,8 +422,21 @@ namespace DataAccess.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ArchivedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BusinessActivity")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<int>("DueDayOfMonth")
                         .HasColumnType("int");
@@ -382,8 +451,16 @@ namespace DataAccess.Migrations
                     b.Property<decimal>("FranchisePortionAmount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("InitialElectricityIndex")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<decimal>("MarketPortionAmount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<decimal>("OwnerPortionAmount")
                         .HasColumnType("decimal(18,2)");
@@ -406,18 +483,20 @@ namespace DataAccess.Migrations
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Version")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId")
-                        .IsUnique();
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("ShopId", "TenantId", "Status", "StartDate", "EndDate");
 
-                    b.ToTable("Contracts", (string)null);
+                    b.ToTable("Contracts");
                 });
 
             modelBuilder.Entity("Entities.Concrete.District", b =>
@@ -429,30 +508,163 @@ namespace DataAccess.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Code")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("ProvinceId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProvinceId");
-
                     b.HasIndex("ProvinceId", "Name")
                         .IsUnique();
 
-                    b.ToTable("Districts", (string)null);
+                    b.ToTable("Districts");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.DollarRate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AfnPerUsd")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("EffectiveFromUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DollarRates");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.Employee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Balance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FatherName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Interest")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("NationalId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("PayDay")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Salary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Taxes")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Employee");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.Expense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("MoneyEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("Expense");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FamilyBalanceEntry", b =>
@@ -491,6 +703,14 @@ namespace DataAccess.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("FamilyPayoutId");
+
+                    b.HasIndex("OwnerDistributionId");
+
                     b.HasIndex("FamilyMemberId", "OccurredAtUtc");
 
                     b.ToTable("FamilyBalanceEntries", (string)null);
@@ -507,11 +727,20 @@ namespace DataAccess.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("FatherName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Gender")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("NationalId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("RelationTag")
                         .HasMaxLength(50)
@@ -543,7 +772,9 @@ namespace DataAccess.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FamilyPayouts", (string)null);
+                    b.HasIndex("OwnerDistributionId");
+
+                    b.ToTable("FamilyPayouts");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FamilyPayoutLine", b =>
@@ -558,9 +789,6 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("FamilyMemberId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("FamilyMemberId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid>("FamilyPayoutId")
                         .HasColumnType("uniqueidentifier");
 
@@ -572,11 +800,9 @@ namespace DataAccess.Migrations
 
                     b.HasIndex("FamilyMemberId");
 
-                    b.HasIndex("FamilyMemberId1");
-
                     b.HasIndex("FamilyPayoutId");
 
-                    b.ToTable("FamilyPayoutLines", (string)null);
+                    b.ToTable("FamilyPayoutLines");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FamilySharePolicy", b =>
@@ -585,11 +811,11 @@ namespace DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateOnly>("EffectiveFrom")
+                    b.Property<DateOnly>("CreatedAtUtc")
                         .HasColumnType("date");
 
-                    b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date");
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("FemaleWeight")
                         .HasColumnType("decimal(6,3)");
@@ -604,9 +830,13 @@ namespace DataAccess.Migrations
                     b.Property<decimal>("ParentPercent")
                         .HasColumnType("decimal(5,2)");
 
-                    b.HasKey("Id");
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
 
-                    b.HasIndex("EffectiveFrom");
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
 
                     b.ToTable("FamilySharePolicies");
                 });
@@ -619,8 +849,7 @@ namespace DataAccess.Migrations
 
                     b.Property<string>("FloorName")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Level")
                         .HasColumnType("int");
@@ -628,20 +857,15 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("MarketId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("MarketId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("Status")
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MarketId1");
-
                     b.HasIndex("MarketId", "Level")
                         .IsUnique();
 
-                    b.ToTable("Floors", (string)null);
+                    b.ToTable("Floors");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FranchiseBalanceEntry", b =>
@@ -662,10 +886,22 @@ namespace DataAccess.Migrations
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Direction")
                         .HasColumnType("int");
 
                     b.Property<Guid>("FranchiseOwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("MoneyEntryId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Notes")
@@ -674,6 +910,13 @@ namespace DataAccess.Migrations
 
                     b.Property<DateTime>("OccurredAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int?>("PeriodMonth")
                         .HasColumnType("int");
@@ -684,11 +927,25 @@ namespace DataAccess.Migrations
                     b.Property<Guid?>("ShopId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("FranchiseOwnerId", "OccurredAtUtc");
+                    b.HasIndex("CollectionAllocationId");
 
-                    b.ToTable("FranchiseBalanceEntries", (string)null);
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("FranchiseOwnerId");
+
+                    b.HasIndex("ShopId");
+
+                    b.ToTable("FranchiseBalanceEntries");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FranchiseOwner", b =>
@@ -706,20 +963,59 @@ namespace DataAccess.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("FatherName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("NationalId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<string>("Phone")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.HasKey("Id");
+
+                    b.ToTable("FranchiseOwners");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.FranchiseOwnerBalance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Balance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("FranchiseOwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("TotalIn")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalOut")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("UpdatedAtBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
-                    b.ToTable("FranchiseOwners", (string)null);
+                    b.HasIndex("FranchiseOwnerId");
+
+                    b.ToTable("FranchiseOwnerBalances");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Market", b =>
@@ -738,7 +1034,7 @@ namespace DataAccess.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Markets", (string)null);
+                    b.ToTable("Markets");
                 });
 
             modelBuilder.Entity("Entities.Concrete.MarketMember", b =>
@@ -766,14 +1062,69 @@ namespace DataAccess.Migrations
                     b.ToTable("MarketMembers", (string)null);
                 });
 
+            modelBuilder.Entity("Entities.Concrete.MediaAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("HashChecksum")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OwnerType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StorageUrl")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerType", "OwnerId", "Kind");
+
+                    b.ToTable("MediaAssets", (string)null);
+                });
+
             modelBuilder.Entity("Entities.Concrete.MeterReading", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("CurrentIndex")
+                        .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTimeOffset?>("FinalizedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("FinalizedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsFinalized")
                         .HasColumnType("bit");
@@ -786,34 +1137,120 @@ namespace DataAccess.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<decimal>("PreviousIndex")
+                        .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
                     b.Property<DateOnly>("ReadingDate")
                         .HasColumnType("date");
 
                     b.Property<decimal>("ReserveRate")
+                        .HasPrecision(5, 4)
                         .HasColumnType("decimal(5,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<Guid>("ShopId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ShopId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Year")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ShopId1");
+                    b.HasIndex("ContractId");
 
                     b.HasIndex("ShopId", "Year", "Month")
                         .IsUnique();
 
-                    b.ToTable("MeterReadings", (string)null);
+                    b.ToTable("MeterReadings");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.MoneyAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AccountType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Currency")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MoneyAccounts");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.MoneyEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AfnPerUsdAtThatTime")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("CollectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Currency")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ExpenseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MoneyAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("UsdEquivalent")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("ExpenseId");
+
+                    b.HasIndex("MoneyAccountId");
+
+                    b.ToTable("MoneyEntries");
                 });
 
             modelBuilder.Entity("Entities.Concrete.OperationClaim", b =>
@@ -890,7 +1327,13 @@ namespace DataAccess.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("OwnerDistributions", (string)null);
+                    b.HasIndex("CollectionAllocationId");
+
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("ContractId");
+
+                    b.ToTable("OwnerDistributions");
                 });
 
             modelBuilder.Entity("Entities.Concrete.OwnerDistributionLine", b =>
@@ -919,7 +1362,7 @@ namespace DataAccess.Migrations
 
                     b.HasIndex("OwnerDistributionId");
 
-                    b.ToTable("OwnerDistributionLines", (string)null);
+                    b.ToTable("OwnerDistributionLines");
                 });
 
             modelBuilder.Entity("Entities.Concrete.OwnerDistributionPolicy", b =>
@@ -928,11 +1371,11 @@ namespace DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateOnly>("EffectiveFrom")
+                    b.Property<DateOnly>("CreatedAtUtc")
                         .HasColumnType("date");
 
-                    b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date");
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(300)
@@ -953,37 +1396,51 @@ namespace DataAccess.Migrations
                     b.Property<decimal>("RateZakat")
                         .HasColumnType("decimal(5,2)");
 
-                    b.HasKey("Id");
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
 
-                    b.HasIndex("EffectiveFrom");
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
 
                     b.ToTable("OwnerDistributionPolicies");
                 });
 
-            modelBuilder.Entity("Entities.Concrete.Product", b =>
+            modelBuilder.Entity("Entities.Concrete.Phone", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Label")
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Name")
+                    b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<short>("UnitsInStock")
-                        .HasColumnType("smallint");
+                    b.Property<int>("OwnerType")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Products");
+                    b.ToTable("Phones", (string)null);
                 });
 
             modelBuilder.Entity("Entities.Concrete.Province", b =>
@@ -995,25 +1452,18 @@ namespace DataAccess.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Code")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("Provinces", (string)null);
+                    b.ToTable("Provinces");
                 });
 
             modelBuilder.Entity("Entities.Concrete.ReserveAccount", b =>
@@ -1037,7 +1487,7 @@ namespace DataAccess.Migrations
                     b.HasIndex("Type")
                         .IsUnique();
 
-                    b.ToTable("ReserveAccounts", (string)null);
+                    b.ToTable("ReserveAccounts");
                 });
 
             modelBuilder.Entity("Entities.Concrete.ReserveEntry", b =>
@@ -1058,6 +1508,12 @@ namespace DataAccess.Migrations
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -1072,11 +1528,27 @@ namespace DataAccess.Migrations
                     b.Property<Guid?>("MeterReadingId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("MoneyEntryId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("OccurredAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<Guid>("ReserveAccountId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1088,9 +1560,9 @@ namespace DataAccess.Migrations
 
                     b.HasIndex("MeterReadingId");
 
-                    b.HasIndex("ReserveAccountId", "OccurredAtUtc");
+                    b.HasIndex("ReserveAccountId");
 
-                    b.ToTable("ReserveEntries", (string)null);
+                    b.ToTable("ReserveEntries");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Shop", b =>
@@ -1122,7 +1594,7 @@ namespace DataAccess.Migrations
 
                     b.HasIndex("FloorId", "UnitNumber");
 
-                    b.ToTable("Shops", (string)null);
+                    b.ToTable("Shops");
                 });
 
             modelBuilder.Entity("Entities.Concrete.ShopFranchiseShare", b =>
@@ -1140,9 +1612,6 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("FranchiseOwnerId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("FranchiseOwnerId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -1153,21 +1622,14 @@ namespace DataAccess.Migrations
                     b.Property<Guid>("ShopId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ShopId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("FranchiseOwnerId");
 
-                    b.HasIndex("FranchiseOwnerId1");
-
-                    b.HasIndex("ShopId1");
-
                     b.HasIndex("ShopId", "FranchiseOwnerId", "EffectiveFrom")
                         .IsUnique();
 
-                    b.ToTable("ShopFranchiseShares", (string)null);
+                    b.ToTable("ShopFranchiseShares");
                 });
 
             modelBuilder.Entity("Entities.Concrete.SingleRatePolicy", b =>
@@ -1176,11 +1638,11 @@ namespace DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateOnly>("EffectiveFrom")
+                    b.Property<DateOnly>("CreatedAtUtc")
                         .HasColumnType("date");
 
-                    b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date");
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(300)
@@ -1192,11 +1654,86 @@ namespace DataAccess.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Type", "EffectiveFrom");
-
                     b.ToTable("SingleRatePolicies");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.TaxPaymentEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("CollectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("MoneyEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<Guid?>("OwnerDistributionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("OwnerDistributionId", "OccurredAtUtc");
+
+                    b.ToTable("TaxPaymentEntries", (string)null);
                 });
 
             modelBuilder.Entity("Entities.Concrete.Tenant", b =>
@@ -1214,12 +1751,21 @@ namespace DataAccess.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("FatherName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Phone")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<string>("NationalId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("TaxOrIdNumber")
                         .HasMaxLength(50)
@@ -1227,7 +1773,7 @@ namespace DataAccess.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Tenants", (string)null);
+                    b.ToTable("Tenants");
                 });
 
             modelBuilder.Entity("Entities.Concrete.User", b =>
@@ -1285,46 +1831,139 @@ namespace DataAccess.Migrations
                     b.ToTable("UserOperationClaims");
                 });
 
+            modelBuilder.Entity("Entities.Concrete.Worker", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Duty")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FatherName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NationalId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("ShopId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShopId");
+
+                    b.ToTable("Worker");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.ZakatPaymentEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("CollectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("MoneyEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<Guid?>("OwnerDistributionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("OwnerDistributionId", "OccurredAtUtc");
+
+                    b.ToTable("ZakatPaymentEntries", (string)null);
+                });
+
             modelBuilder.Entity("Entities.Concrete.Accrual", b =>
                 {
-                    b.HasOne("Entities.Concrete.Contract", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("Accruals")
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.Contract", "Contract")
-                        .WithMany()
-                        .HasForeignKey("ContractId1");
-
-                    b.HasOne("Entities.Concrete.MeterReading", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.MeterReading", "MeterReading")
+                        .WithMany("Accruals")
                         .HasForeignKey("MeterReadingId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Entities.Concrete.MeterReading", "MeterReading")
-                        .WithMany()
-                        .HasForeignKey("MeterReadingId1");
-
-                    b.HasOne("Entities.Concrete.Shop", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Shop", "Shop")
+                        .WithMany("Accruals")
                         .HasForeignKey("ShopId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.Shop", "Shop")
-                        .WithMany()
-                        .HasForeignKey("ShopId1");
-
-                    b.HasOne("Entities.Concrete.Tenant", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Tenant", "Tenant")
+                        .WithMany("Accruals")
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("Entities.Concrete.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId1");
 
                     b.Navigation("Contract");
 
@@ -1337,25 +1976,17 @@ namespace DataAccess.Migrations
 
             modelBuilder.Entity("Entities.Concrete.AccrualSettlement", b =>
                 {
-                    b.HasOne("Entities.Concrete.Accrual", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Accrual", "Accrual")
+                        .WithMany("AccrualSettlements")
                         .HasForeignKey("AccrualId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.Accrual", "Accrual")
-                        .WithMany()
-                        .HasForeignKey("AccrualId1");
-
-                    b.HasOne("Entities.Concrete.CollectionAllocation", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.CollectionAllocation", "CollectionAllocation")
+                        .WithMany("AccrualSettlements")
                         .HasForeignKey("CollectionAllocationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("Entities.Concrete.CollectionAllocation", "CollectionAllocation")
-                        .WithMany()
-                        .HasForeignKey("CollectionAllocationId1");
 
                     b.Navigation("Accrual");
 
@@ -1381,37 +2012,46 @@ namespace DataAccess.Migrations
                     b.Navigation("Province");
                 });
 
+            modelBuilder.Entity("Entities.Concrete.CharityPaymentEntry", b =>
+                {
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
+                        .WithMany("CharityPayments")
+                        .HasForeignKey("CollectionId");
+
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("CharityPayments")
+                        .HasForeignKey("ContractId");
+
+                    b.HasOne("Entities.Concrete.OwnerDistribution", "OwnerDistribution")
+                        .WithMany("CharityPayments")
+                        .HasForeignKey("OwnerDistributionId");
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("OwnerDistribution");
+                });
+
             modelBuilder.Entity("Entities.Concrete.Collection", b =>
                 {
-                    b.HasOne("Entities.Concrete.Contract", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("Collections")
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.Contract", "Contract")
-                        .WithMany()
-                        .HasForeignKey("ContractId1");
-
-                    b.HasOne("Entities.Concrete.Shop", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Shop", "Shop")
+                        .WithMany("Collections")
                         .HasForeignKey("ShopId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.Shop", "Shop")
-                        .WithMany()
-                        .HasForeignKey("ShopId1");
-
-                    b.HasOne("Entities.Concrete.Tenant", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Tenant", "Tenant")
+                        .WithMany("Collections")
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("Entities.Concrete.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId1");
 
                     b.Navigation("Contract");
 
@@ -1422,51 +2062,31 @@ namespace DataAccess.Migrations
 
             modelBuilder.Entity("Entities.Concrete.CollectionAllocation", b =>
                 {
-                    b.HasOne("Entities.Concrete.Collection", null)
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
                         .WithMany("Allocations")
                         .HasForeignKey("CollectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.Collection", "Collection")
-                        .WithMany()
-                        .HasForeignKey("CollectionId1");
-
-                    b.HasOne("Entities.Concrete.Contract", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("Allocations")
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Entities.Concrete.Contract", "Contract")
-                        .WithMany()
-                        .HasForeignKey("ContractId1");
-
-                    b.HasOne("Entities.Concrete.MeterReading", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.MeterReading", "MeterReading")
+                        .WithMany("Allocations")
                         .HasForeignKey("MeterReadingId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Entities.Concrete.MeterReading", "MeterReading")
-                        .WithMany()
-                        .HasForeignKey("MeterReadingId1");
-
-                    b.HasOne("Entities.Concrete.Shop", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Shop", "Shop")
+                        .WithMany("Allocations")
                         .HasForeignKey("ShopId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Entities.Concrete.Shop", "Shop")
-                        .WithMany()
-                        .HasForeignKey("ShopId1");
-
-                    b.HasOne("Entities.Concrete.Tenant", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Tenant", "Tenant")
+                        .WithMany("Allocations")
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Entities.Concrete.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId1");
 
                     b.Navigation("Collection");
 
@@ -1488,8 +2108,8 @@ namespace DataAccess.Migrations
                         .IsRequired();
 
                     b.HasOne("Entities.Concrete.Tenant", "Tenant")
-                        .WithOne("Contract")
-                        .HasForeignKey("Entities.Concrete.Contract", "TenantId")
+                        .WithMany("Contracts")
+                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1509,108 +2129,244 @@ namespace DataAccess.Migrations
                     b.Navigation("Province");
                 });
 
+            modelBuilder.Entity("Entities.Concrete.Expense", b =>
+                {
+                    b.HasOne("Entities.Concrete.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId");
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("Entities.Concrete.FamilyBalanceEntry", b =>
                 {
-                    b.HasOne("Entities.Concrete.FamilyMember", null)
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
+                        .WithMany("FamilyBalanceEntries")
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("FamilyBalanceEntries")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Entities.Concrete.FamilyMember", "FamilyMember")
                         .WithMany()
                         .HasForeignKey("FamilyMemberId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Entities.Concrete.FamilyPayout", "FamilyPayout")
+                        .WithMany("FamilyBalanceEntries")
+                        .HasForeignKey("FamilyPayoutId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Entities.Concrete.OwnerDistribution", "OwnerDistribution")
+                        .WithMany("FamilyBalanceEntries")
+                        .HasForeignKey("OwnerDistributionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("FamilyMember");
+
+                    b.Navigation("FamilyPayout");
+
+                    b.Navigation("OwnerDistribution");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.FamilyPayout", b =>
+                {
+                    b.HasOne("Entities.Concrete.OwnerDistribution", "OwnerDistribution")
+                        .WithMany("FamilyPayouts")
+                        .HasForeignKey("OwnerDistributionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OwnerDistribution");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FamilyPayoutLine", b =>
                 {
-                    b.HasOne("Entities.Concrete.FamilyMember", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.FamilyMember", "FamilyMember")
+                        .WithMany("FamilyPayoutLines")
                         .HasForeignKey("FamilyMemberId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.FamilyMember", "FamilyMember")
-                        .WithMany()
-                        .HasForeignKey("FamilyMemberId1");
-
-                    b.HasOne("Entities.Concrete.FamilyPayout", null)
-                        .WithMany("Lines")
+                    b.HasOne("Entities.Concrete.FamilyPayout", "FamilyPayout")
+                        .WithMany("FamilyPayoutLines")
                         .HasForeignKey("FamilyPayoutId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("FamilyMember");
+
+                    b.Navigation("FamilyPayout");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Floor", b =>
                 {
-                    b.HasOne("Entities.Concrete.Market", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.Market", "Market")
+                        .WithMany("Floors")
                         .HasForeignKey("MarketId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("Entities.Concrete.Market", "Market")
-                        .WithMany()
-                        .HasForeignKey("MarketId1");
 
                     b.Navigation("Market");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FranchiseBalanceEntry", b =>
                 {
-                    b.HasOne("Entities.Concrete.FranchiseOwner", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.CollectionAllocation", "CollectionAllocation")
+                        .WithMany("FranchiseBalanceEntries")
+                        .HasForeignKey("CollectionAllocationId");
+
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
+                        .WithMany("FranchiseBalanceEntries")
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("FranchiseBalanceEntries")
+                        .HasForeignKey("ContractId");
+
+                    b.HasOne("Entities.Concrete.FranchiseOwner", "FranchiseOwner")
+                        .WithMany("FranchiseBalanceEntries")
                         .HasForeignKey("FranchiseOwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Entities.Concrete.MeterReading", b =>
-                {
-                    b.HasOne("Entities.Concrete.Shop", null)
-                        .WithMany()
-                        .HasForeignKey("ShopId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
 
                     b.HasOne("Entities.Concrete.Shop", "Shop")
-                        .WithMany()
-                        .HasForeignKey("ShopId1");
+                        .WithMany("FranchiseBalanceEntries")
+                        .HasForeignKey("ShopId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("CollectionAllocation");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("FranchiseOwner");
 
                     b.Navigation("Shop");
                 });
 
+            modelBuilder.Entity("Entities.Concrete.FranchiseOwnerBalance", b =>
+                {
+                    b.HasOne("Entities.Concrete.FranchiseOwner", "FranchiseOwner")
+                        .WithMany("FranchiseOwnerBalances")
+                        .HasForeignKey("FranchiseOwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FranchiseOwner");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.MeterReading", b =>
+                {
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Entities.Concrete.Shop", "Shop")
+                        .WithMany("MeterReadings")
+                        .HasForeignKey("ShopId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("Shop");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.MoneyEntry", b =>
+                {
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
+                        .WithMany()
+                        .HasForeignKey("CollectionId");
+
+                    b.HasOne("Entities.Concrete.Expense", "Expense")
+                        .WithMany()
+                        .HasForeignKey("ExpenseId");
+
+                    b.HasOne("Entities.Concrete.MoneyAccount", "MoneyAccount")
+                        .WithMany()
+                        .HasForeignKey("MoneyAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("Expense");
+
+                    b.Navigation("MoneyAccount");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.OwnerDistribution", b =>
+                {
+                    b.HasOne("Entities.Concrete.CollectionAllocation", "CollectionAllocation")
+                        .WithMany("OwnerDistributions")
+                        .HasForeignKey("CollectionAllocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
+                        .WithMany("OwnerDistributions")
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("OwnerDistributions")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("CollectionAllocation");
+
+                    b.Navigation("Contract");
+                });
+
             modelBuilder.Entity("Entities.Concrete.OwnerDistributionLine", b =>
                 {
-                    b.HasOne("Entities.Concrete.OwnerDistribution", null)
-                        .WithMany()
+                    b.HasOne("Entities.Concrete.OwnerDistribution", "OwnerDistribution")
+                        .WithMany("OwnerDistributionLines")
                         .HasForeignKey("OwnerDistributionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("OwnerDistribution");
                 });
 
             modelBuilder.Entity("Entities.Concrete.ReserveEntry", b =>
                 {
                     b.HasOne("Entities.Concrete.CollectionAllocation", "CollectionAllocation")
-                        .WithMany()
+                        .WithMany("ReserveEntries")
                         .HasForeignKey("CollectionAllocationId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Entities.Concrete.Collection", "Collection")
-                        .WithMany()
+                        .WithMany("ReserveEntries")
                         .HasForeignKey("CollectionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Entities.Concrete.Contract", "Contract")
-                        .WithMany()
+                        .WithMany("ReserveEntries")
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Entities.Concrete.MeterReading", "MeterReading")
-                        .WithMany()
+                        .WithMany("ReserveEntries")
                         .HasForeignKey("MeterReadingId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Entities.Concrete.ReserveAccount", "ReserveAccount")
-                        .WithMany()
+                        .WithMany("ReserveEntries")
                         .HasForeignKey("ReserveAccountId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1629,15 +2385,15 @@ namespace DataAccess.Migrations
             modelBuilder.Entity("Entities.Concrete.Shop", b =>
                 {
                     b.HasOne("Entities.Concrete.Floor", "Floor")
-                        .WithMany()
+                        .WithMany("Shops")
                         .HasForeignKey("FloorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Entities.Concrete.Market", "Market")
-                        .WithMany()
+                        .WithMany("Shops")
                         .HasForeignKey("MarketId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Floor");
@@ -1647,34 +2403,132 @@ namespace DataAccess.Migrations
 
             modelBuilder.Entity("Entities.Concrete.ShopFranchiseShare", b =>
                 {
-                    b.HasOne("Entities.Concrete.FranchiseOwner", null)
-                        .WithMany("ShopShares")
+                    b.HasOne("Entities.Concrete.FranchiseOwner", "FranchiseOwner")
+                        .WithMany("ShopFranchiseShares")
                         .HasForeignKey("FranchiseOwnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Entities.Concrete.FranchiseOwner", "FranchiseOwner")
-                        .WithMany()
-                        .HasForeignKey("FranchiseOwnerId1");
-
-                    b.HasOne("Entities.Concrete.Shop", null)
-                        .WithMany("FranchiseShares")
+                    b.HasOne("Entities.Concrete.Shop", "Shop")
+                        .WithMany("ShopFranchiseShares")
                         .HasForeignKey("ShopId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("Entities.Concrete.Shop", "Shop")
-                        .WithMany()
-                        .HasForeignKey("ShopId1");
 
                     b.Navigation("FranchiseOwner");
 
                     b.Navigation("Shop");
                 });
 
+            modelBuilder.Entity("Entities.Concrete.TaxPaymentEntry", b =>
+                {
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
+                        .WithMany("TaxPayments")
+                        .HasForeignKey("CollectionId");
+
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("TaxPayments")
+                        .HasForeignKey("ContractId");
+
+                    b.HasOne("Entities.Concrete.OwnerDistribution", "OwnerDistribution")
+                        .WithMany("TaxPayments")
+                        .HasForeignKey("OwnerDistributionId");
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("OwnerDistribution");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.Worker", b =>
+                {
+                    b.HasOne("Entities.Concrete.Shop", "Shop")
+                        .WithMany("Workers")
+                        .HasForeignKey("ShopId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Shop");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.ZakatPaymentEntry", b =>
+                {
+                    b.HasOne("Entities.Concrete.Collection", "Collection")
+                        .WithMany("ZakatPayments")
+                        .HasForeignKey("CollectionId");
+
+                    b.HasOne("Entities.Concrete.Contract", "Contract")
+                        .WithMany("ZakatPayments")
+                        .HasForeignKey("ContractId");
+
+                    b.HasOne("Entities.Concrete.OwnerDistribution", "OwnerDistribution")
+                        .WithMany("ZakatPayments")
+                        .HasForeignKey("OwnerDistributionId");
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("OwnerDistribution");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.Accrual", b =>
+                {
+                    b.Navigation("AccrualSettlements");
+                });
+
             modelBuilder.Entity("Entities.Concrete.Collection", b =>
                 {
                     b.Navigation("Allocations");
+
+                    b.Navigation("CharityPayments");
+
+                    b.Navigation("FamilyBalanceEntries");
+
+                    b.Navigation("FranchiseBalanceEntries");
+
+                    b.Navigation("OwnerDistributions");
+
+                    b.Navigation("ReserveEntries");
+
+                    b.Navigation("TaxPayments");
+
+                    b.Navigation("ZakatPayments");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.CollectionAllocation", b =>
+                {
+                    b.Navigation("AccrualSettlements");
+
+                    b.Navigation("FranchiseBalanceEntries");
+
+                    b.Navigation("OwnerDistributions");
+
+                    b.Navigation("ReserveEntries");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.Contract", b =>
+                {
+                    b.Navigation("Accruals");
+
+                    b.Navigation("Allocations");
+
+                    b.Navigation("CharityPayments");
+
+                    b.Navigation("Collections");
+
+                    b.Navigation("FamilyBalanceEntries");
+
+                    b.Navigation("FranchiseBalanceEntries");
+
+                    b.Navigation("OwnerDistributions");
+
+                    b.Navigation("ReserveEntries");
+
+                    b.Navigation("TaxPayments");
+
+                    b.Navigation("ZakatPayments");
                 });
 
             modelBuilder.Entity("Entities.Concrete.District", b =>
@@ -1682,14 +2536,61 @@ namespace DataAccess.Migrations
                     b.Navigation("Addresses");
                 });
 
+            modelBuilder.Entity("Entities.Concrete.FamilyMember", b =>
+                {
+                    b.Navigation("FamilyPayoutLines");
+                });
+
             modelBuilder.Entity("Entities.Concrete.FamilyPayout", b =>
                 {
-                    b.Navigation("Lines");
+                    b.Navigation("FamilyBalanceEntries");
+
+                    b.Navigation("FamilyPayoutLines");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.Floor", b =>
+                {
+                    b.Navigation("Shops");
                 });
 
             modelBuilder.Entity("Entities.Concrete.FranchiseOwner", b =>
                 {
-                    b.Navigation("ShopShares");
+                    b.Navigation("FranchiseBalanceEntries");
+
+                    b.Navigation("FranchiseOwnerBalances");
+
+                    b.Navigation("ShopFranchiseShares");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.Market", b =>
+                {
+                    b.Navigation("Floors");
+
+                    b.Navigation("Shops");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.MeterReading", b =>
+                {
+                    b.Navigation("Accruals");
+
+                    b.Navigation("Allocations");
+
+                    b.Navigation("ReserveEntries");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.OwnerDistribution", b =>
+                {
+                    b.Navigation("CharityPayments");
+
+                    b.Navigation("FamilyBalanceEntries");
+
+                    b.Navigation("FamilyPayouts");
+
+                    b.Navigation("OwnerDistributionLines");
+
+                    b.Navigation("TaxPayments");
+
+                    b.Navigation("ZakatPayments");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Province", b =>
@@ -1699,16 +2600,39 @@ namespace DataAccess.Migrations
                     b.Navigation("Districts");
                 });
 
+            modelBuilder.Entity("Entities.Concrete.ReserveAccount", b =>
+                {
+                    b.Navigation("ReserveEntries");
+                });
+
             modelBuilder.Entity("Entities.Concrete.Shop", b =>
                 {
+                    b.Navigation("Accruals");
+
+                    b.Navigation("Allocations");
+
+                    b.Navigation("Collections");
+
                     b.Navigation("Contracts");
 
-                    b.Navigation("FranchiseShares");
+                    b.Navigation("FranchiseBalanceEntries");
+
+                    b.Navigation("MeterReadings");
+
+                    b.Navigation("ShopFranchiseShares");
+
+                    b.Navigation("Workers");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Tenant", b =>
                 {
-                    b.Navigation("Contract");
+                    b.Navigation("Accruals");
+
+                    b.Navigation("Allocations");
+
+                    b.Navigation("Collections");
+
+                    b.Navigation("Contracts");
                 });
 #pragma warning restore 612, 618
         }

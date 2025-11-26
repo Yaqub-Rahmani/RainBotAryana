@@ -6,12 +6,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //    OwnerDistribution(Paket dağıtım olayı – anlık “snapshot”)
+    //OwnerDistribution(Paket dağıtım olayı – anlık “snapshot”)
     //Market sahibi payı için tek bir dağıtım çalıştırması.O an kullanılan yüzdeleri ve tutarları snapshot olarak saklarız ki,
     //ileride oranlar değişse bile bu kayıt sabit kalsın.
+    // OwnerDistribution (Paket dağıtım olayı – anlık “snapshot”)
     public class OwnerDistribution : IEntity
     {
         [Key]
@@ -27,11 +30,11 @@ namespace Entities.Concrete
         public decimal OwnerAmountInput { get; set; }
 
         /// <summary>O an kullanılan oranlar (snapshot) – business belirler</summary>
-        [Column(TypeName = "decimal(5,2)")] public decimal RateTax { get; set; }      // örn 20.00
-        [Column(TypeName = "decimal(5,2)")] public decimal RateZakat { get; set; }    // 2.50
-        [Column(TypeName = "decimal(5,2)")] public decimal RateCharity { get; set; }  // 1.50
-        [Column(TypeName = "decimal(5,2)")] public decimal RateOwnerReserve { get; set; } // 16.00
-        [Column(TypeName = "decimal(5,2)")] public decimal RateFamilyPool { get; set; }   // 60.00
+        [Column(TypeName = "decimal(5,2)")] public decimal RateTax { get; set; }
+        [Column(TypeName = "decimal(5,2)")] public decimal RateZakat { get; set; }
+        [Column(TypeName = "decimal(5,2)")] public decimal RateCharity { get; set; }
+        [Column(TypeName = "decimal(5,2)")] public decimal RateOwnerReserve { get; set; }
+        [Column(TypeName = "decimal(5,2)")] public decimal RateFamilyPool { get; set; }
 
         /// <summary>Çıkan tutarlar (snapshot)</summary>
         [Column(TypeName = "decimal(18,2)")] public decimal AmountTax { get; set; }
@@ -46,5 +49,45 @@ namespace Entities.Concrete
         /// <summary>Not/Açıklama</summary>
         [MaxLength(500)]
         public string? Notes { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ContractId))]
+        public Contract? Contract { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(CollectionId))]
+        public Collection? Collection { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(CollectionAllocationId))]
+        public CollectionAllocation? CollectionAllocation { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FamilyBalanceEntry> FamilyBalanceEntries { get; set; } = new List<FamilyBalanceEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FamilyPayout> FamilyPayouts { get; set; } = new List<FamilyPayout>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<OwnerDistributionLine> OwnerDistributionLines { get; set; } = new List<OwnerDistributionLine>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<TaxPaymentEntry> TaxPayments { get; set; } = new List<TaxPaymentEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<ZakatPaymentEntry> ZakatPayments { get; set; } = new List<ZakatPaymentEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<CharityPaymentEntry> CharityPayments { get; set; } = new List<CharityPaymentEntry>();
+
     }
 }

@@ -3,6 +3,7 @@ using Autofac.Extensions.DependencyInjection;
 using Business.DependencyResolvers.Autofac;
 using Core.Extensions;
 using Core.Utilities.Extensions;
+using Core.Utilities.Files;
 using Core.Utilities.IoC;
 using Core.Utilities.Security.Jwt;
 using DataAccess.Concrete.EntityFramework;
@@ -11,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System;
+using System.Text.Json.Serialization;
+using WebAPI.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,10 +22,22 @@ builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
 builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
 {
     containerBuilder.RegisterModule(new AutofacBusinessModule());
+    // IWebHostEnvironment -> IPathProvider köprüsü (yalnız WebAPI’de)
+    containerBuilder
+        .Register(ctx => new WebPathProvider(ctx.Resolve<IWebHostEnvironment>()))
+        .As<IPathProvider>()
+        .SingleInstance();
 });
 
 // Services
-builder.Services.AddControllers();
+//builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(o =>
+    {
+        o.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        o.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -72,6 +87,7 @@ builder.Services.AddDbContext<RainBotContext>(opt =>
 // Core module (MemoryCache, HttpContextAccessor)
 builder.Services.AddDependencyResolvers(new ICoreModule[] { new CoreModule() });
 
+
 // JWT
 var tokenOptions = builder.Configuration.GetSection("TokenOptions").Get<TokenOptions>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -110,5 +126,6 @@ app.UseAuthorization();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ExceptionMiddleware>(); // zaten eklemiştik
 
+app.UseStaticFiles();
 app.MapControllers();
 app.Run();

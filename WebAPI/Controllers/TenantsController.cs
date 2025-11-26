@@ -85,5 +85,17 @@ namespace WebAPI.Controllers
             var r = _service.Deactivate(id);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
+
+        /// <summary>
+        /// Sistemdeki kiracıların özet görünüm listesini döner.
+        /// </summary>
+        /// <param name="active">true/false/null → aktif/pasif/tümü</param>
+        [HttpGet("views/all")]
+        [AllowAnonymous]
+        public IActionResult GetAllTenantView([FromQuery] bool? active)
+        {
+            var result = _service.GetAllTenantView(active);
+            return Ok(result.Data);
+        }
     }
 }

@@ -44,7 +44,7 @@ namespace WebAPI.Controllers
 
         [HttpPost]
         [Authorize]
-        public IActionResult Add([FromBody] Entities.Concrete.District dto)
+        public IActionResult Add([FromBody] District dto)
         {
             var r = _service.Add(dto);
             return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
@@ -52,7 +52,7 @@ namespace WebAPI.Controllers
 
         [HttpPut("{id:int}")]
         [Authorize]
-        public IActionResult Update(int id, [FromBody] Entities.Concrete.District dto)
+        public IActionResult Update(int id, [FromBody] District dto)
         {
             if (id != dto.Id) return BadRequest("Id mismatch.");
             var r = _service.Update(dto);

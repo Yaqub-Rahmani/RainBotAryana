@@ -16,5 +16,6 @@ namespace Entities.Concrete
         public byte[] PasswordSalt { get; set; } = null!;
         public byte[] PasswordHash { get; set; } = null!;
         public bool Status { get; set; } = true;
+
     }
 }

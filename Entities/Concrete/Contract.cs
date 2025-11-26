@@ -7,6 +7,9 @@ using System.Runtime.ConstrainedExecution;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 
 namespace Entities.Concrete
 {
@@ -21,9 +24,9 @@ namespace Entities.Concrete
         Active = 1,
         Archived = 2
     }
-
-    public class Contract: IEntity
+    public class Contract : IEntity
     {
+
         [Key]
         public Guid Id { get; set; }
 
@@ -34,6 +37,15 @@ namespace Entities.Concrete
         /// <summary>Bağlı olduğu kiracı</summary>
         [Required]
         public Guid TenantId { get; set; }
+
+        public int CreatedByUserId { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
+
+        public int? ArchivedByUserId { get; set; }
+        public DateTime? ArchivedAtUtc { get; set; }
 
         /// <summary>İmza tarihi (sözleşmenin imzalandığı gün)</summary>
         [Required]
@@ -67,6 +79,13 @@ namespace Entities.Concrete
         [MaxLength(500)]
         public string? ElectricityNote { get; set; }
 
+        /// <summary>Sözleşme başlarken elektrik sayacının endeksi</summary>
+        [Precision(18, 3)]
+        public decimal? InitialElectricityIndex { get; set; }
+
+        [MaxLength(500)]
+        public string? BusinessActivity { get; set; }
+
         /// <summary>Aktif/Arşiv (sürümleme)</summary>
         [Required]
         public ContractStatus Status { get; set; } = ContractStatus.Active;
@@ -75,35 +94,67 @@ namespace Entities.Concrete
         [MaxLength(20)]
         public string? Version { get; set; }
 
+        [MaxLength(1000)]
+        public string? Note { get; set; }
+
         /// <summary>Arşiv/iptal gerekçesi (opsiyonel)</summary>
         [MaxLength(500)]
         public string? ArchiveReason { get; set; }
 
-        /// <summary>Oluşturma/Güncelleme izleri (opsiyonel)</summary>
-        public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-        public DateTime? UpdatedAtUtc { get; set; }
-
         // Navigation
-        
-        public Shop? Shop { get; set; }
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ShopId))]
+        public Shop Shop { get; set; } = null!;
 
-        public Tenant? Tenant { get; set; }
-
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(TenantId))]
+        public Tenant Tenant { get; set; } = null!;
 
         // Yardımcı: Toplam sabit kira (elektrik hariç)
         [NotMapped]
         public decimal TotalFixedRent => OwnerPortionAmount + FranchisePortionAmount + MarketPortionAmount;
 
-        /// <summary>
-        /// Sözleşme tarih tutarlılık kontrolü (isteğe bağlı domain metodu).
-        /// Başlangıç <= Bitiş, İmza <= Bitiş vb. basit doğrulamaları üst katman çağırabilir.
-        /// </summary>
-        //public void ValidateDatesOrThrow()
-        //{
-        //    if (StartDate > EndDate)
-        //        throw new InvalidOperationException("StartDate, EndDate’den büyük olamaz.");
-        //    if (SignedOn > EndDate)
-        //        throw new InvalidOperationException("SignedOn, EndDate’den büyük olamaz.");
-        //}
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<Accrual> Accruals { get; set; } = new List<Accrual>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<Collection> Collections { get; set; } = new List<Collection>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<CollectionAllocation> Allocations { get; set; } = new List<CollectionAllocation>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FamilyBalanceEntry> FamilyBalanceEntries { get; set; } = new List<FamilyBalanceEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FranchiseBalanceEntry> FranchiseBalanceEntries { get; set; } = new List<FranchiseBalanceEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<OwnerDistribution> OwnerDistributions { get; set; } = new List<OwnerDistribution>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<ReserveEntry> ReserveEntries { get; set; } = new List<ReserveEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<TaxPaymentEntry> TaxPayments { get; set; } = new List<TaxPaymentEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<ZakatPaymentEntry> ZakatPayments { get; set; } = new List<ZakatPaymentEntry>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<CharityPaymentEntry> CharityPayments { get; set; } = new List<CharityPaymentEntry>();
+
     }
 }

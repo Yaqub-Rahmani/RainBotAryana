@@ -1,17 +1,15 @@
 ﻿using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //    ReserveAccount(Rezerv Hesabı)
-    //Üç ayrı hesap: Elektrik / Market / Market Sahibi.
-    //İstersen ileride farklı rezerv türleri de ekleyebilirsin.
-
+    // ReserveAccount (Rezerv Hesabı)
+    // Üç ayrı hesap: Elektrik / Market / Market Sahibi.
+    // İstersen ileride farklı rezerv türleri de ekleyebilirsin.
     public enum ReserveAccountType
     {
         Electricity = 1, // Elektrik Rezervesi
@@ -19,7 +17,7 @@ namespace Entities.Concrete
         Owner = 3        // Market Sahibi Rezervesi
     }
 
-    public class ReserveAccount: IEntity
+    public class ReserveAccount : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -34,5 +32,9 @@ namespace Entities.Concrete
 
         /// <summary>Durum</summary>
         public bool IsActive { get; set; } = true;
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<ReserveEntry> ReserveEntries { get; set; } = new List<ReserveEntry>();
     }
 }

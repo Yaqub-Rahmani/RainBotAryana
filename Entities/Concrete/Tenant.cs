@@ -1,17 +1,15 @@
 ﻿using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Runtime.ConstrainedExecution;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //    Tenant(Kiracı)
-    //Sözleşmeler bu varlığa bağlanacak(her dükkânda tek aktif kiracı kuralını Sözleşmeyle yöneteceğiz).
-    //Temel iletişim ve durum alanları içerir.
+    // Tenant (Kiracı)
+    // Sözleşmeler bu varlığa bağlanacak (her dükkânda tek aktif kiracı kuralını Sözleşmeyle yöneteceğiz).
+    // Temel iletişim ve durum alanları içerir.
     public class Tenant : IEntity
     {
         [Key]
@@ -21,11 +19,15 @@ namespace Entities.Concrete
         [Required, MaxLength(200)]
         public string DisplayName { get; set; } = default!;
 
-        [MaxLength(50)]
-        public string? Phone { get; set; }
+        [Required, MaxLength(200)]
+        public string FatherName { get; set; } = default!;
+        public Gender Gender { get; set; } = Gender.Male;
 
         [MaxLength(200)]
         public string? Email { get; set; }
+
+        [MaxLength(20)]
+        public string NationalId { get; set; }
 
         /// <summary>Vergi numarası veya kimlik no (opsiyonel)</summary>
         [MaxLength(50)]
@@ -33,8 +35,20 @@ namespace Entities.Concrete
 
         public bool IsActive { get; set; } = true;
 
-        // Navigation (ileride: Contracts)
-        public Contract? Contract { get; set; }
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<Accrual> Accruals { get; set; } = new List<Accrual>();
 
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<Collection> Collections { get; set; } = new List<Collection>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<CollectionAllocation> Allocations { get; set; } = new List<CollectionAllocation>();
     }
 }

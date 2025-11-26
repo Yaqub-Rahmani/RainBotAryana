@@ -16,5 +16,7 @@ namespace DataAccess.Concrete.EntityFramework
 
         public IQueryable<CollectionAllocation> Query() => _context.Set<CollectionAllocation>().AsQueryable();
         public IQueryable<CollectionAllocation> QueryNoTracking() => _context.Set<CollectionAllocation>().AsNoTracking();
+        public IQueryable<CollectionAllocation> QueryWithIncludes() => QueryNoTracking().Include(x => x.AccrualSettlements).Include(x => x.Collection);
+
     }
 }

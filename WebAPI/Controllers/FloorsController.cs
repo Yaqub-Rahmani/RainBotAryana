@@ -11,13 +11,12 @@ namespace WebAPI.Controllers
     public class FloorsController : ControllerBase
     {
         private readonly IFloorService _service;
-        public FloorsController(IFloorService service) { _service = service; }
+        public FloorsController(IFloorService service) => _service = service;
 
-        // Okumalar
         [HttpGet]
         [AllowAnonymous]
-        public IActionResult GetAll([FromQuery] Guid? marketId, [FromQuery] bool? status)
-            => Ok(_service.GetAll(marketId, status).Data);
+        public IActionResult GetAll([FromQuery] bool? active) =>
+            Ok(_service.GetAll(active).Data);
 
         [HttpGet("{id:guid}")]
         [AllowAnonymous]
@@ -29,9 +28,9 @@ namespace WebAPI.Controllers
 
         [HttpGet("details")]
         [AllowAnonymous]
-        public IActionResult GetDetails([FromQuery] QueryOptions opt, [FromQuery] Guid? marketId, [FromQuery] bool? status)
+        public IActionResult GetDetails([FromQuery] QueryOptions opt, [FromQuery] Guid? marketId)
         {
-            var r = _service.GetDetails(opt, marketId, status);
+            var r = _service.GetDetails(opt, marketId);
             return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
 
@@ -43,10 +42,9 @@ namespace WebAPI.Controllers
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        // Yazmalar
         [HttpPost]
         [Authorize]
-        public IActionResult Add([FromBody] Entities.Concrete.Floor dto)
+        public IActionResult Add([FromBody] Floor dto)
         {
             var r = _service.Add(dto);
             return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
@@ -54,7 +52,7 @@ namespace WebAPI.Controllers
 
         [HttpPut("{id:guid}")]
         [Authorize]
-        public IActionResult Update(Guid id, [FromBody] Entities.Concrete.Floor dto)
+        public IActionResult Update(Guid id, [FromBody] Floor dto)
         {
             if (id != dto.Id) return BadRequest("Id mismatch.");
             var r = _service.Update(dto);

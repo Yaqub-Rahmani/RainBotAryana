@@ -19,4 +19,10 @@
     <ProjectReference Include="..\Entities\Entities.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="libzkfpcsharp">
+      <HintPath>..\ZkBridge\lib\libzkfpcsharp.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

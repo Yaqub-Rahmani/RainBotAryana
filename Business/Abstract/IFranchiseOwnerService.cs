@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.FranchiseOwner;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,13 @@ namespace Business.Abstract
         IDataResult<FranchiseOwner> GetById(Guid id);
         IDataResult<PagedResult<FranchiseOwnerDetailDto>> GetDetails(QueryOptions opt, bool? active = null);
         IDataResult<FranchiseOwnerDetailDto> GetDetailById(Guid id);
+
+        // >>> YENİ: Owner View (liste + paged)
+        // >>> Owner View (liste + paged)
+        IDataResult<List<FranchiseOwnerViewDto>> GetAllOwnerView(bool? active = null);
+        IDataResult<PagedResult<FranchiseOwnerViewDto>> GetOwnerViews(QueryOptions opt, bool? active = null);
+
+        IDataResult<OwnerProfileDto> GetProfile(Guid ownerId);
 
         // Yazma
         IResult Add(FranchiseOwner owner);

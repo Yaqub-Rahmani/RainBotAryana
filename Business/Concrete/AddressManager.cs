@@ -102,7 +102,7 @@ namespace Business.Concrete
         }
 
         [CacheAspect(10)]
-        public IDataResult<List<AddressDetailDto>> GetByOwner(AddressOwnerType ownerType, Guid ownerId)
+        public IDataResult<List<AddressDetailDto>> GetByOwner(MediaOwnerType ownerType, Guid ownerId)
         {
             var q = _addressDal.QueryNoTracking().Where(a => a.OwnerType == ownerType && a.OwnerId == ownerId);
 

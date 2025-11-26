@@ -1,15 +1,17 @@
 ﻿using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
-    //    FranchiseOwner(İmtiyaz Sahibi)
+    //FranchiseOwner(İmtiyaz Sahibi)
     //Bir veya birden fazla dükkânda payı olabilen imtiyaz sahibini temsil eder.
     //Kendi bakiye kayıtlarına ileride bağlayacağız; şimdilik kimlik ve iletişim odaklı.
     public class FranchiseOwner : IEntity
@@ -21,13 +23,15 @@ namespace Entities.Concrete
         [Required, MaxLength(200)]
         public string DisplayName { get; set; } = default!;
 
-        /// <summary>İletişim için telefon (opsiyonel)</summary>
-        [MaxLength(50)]
-        public string? Phone { get; set; }
-
+        public string FatherName { get; set; }
         /// <summary>E-posta (opsiyonel)</summary>
         [MaxLength(200)]
         public string? Email { get; set; }
+
+        [MaxLength(20)]
+        public string NationalId { get; set; }
+
+        public Gender Gender { get; set; } = Gender.Male;
 
         /// <summary>Ek notlar (opsiyonel)</summary>
         [MaxLength(1000)]
@@ -35,7 +39,19 @@ namespace Entities.Concrete
 
         public bool IsActive { get; set; } = true;
 
+
         // Navigation
-        public ICollection<ShopFranchiseShare> ShopShares { get; set; } = new List<ShopFranchiseShare>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FranchiseOwnerBalance> FranchiseOwnerBalances { get; set; } = new List<FranchiseOwnerBalance>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<ShopFranchiseShare> ShopFranchiseShares { get; set; } = new List<ShopFranchiseShare>();
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<FranchiseBalanceEntry> FranchiseBalanceEntries { get; set; } = new List<FranchiseBalanceEntry>();
     }
 }

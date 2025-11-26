@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.Collection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,13 +14,12 @@ namespace Business.Abstract
 {
     public interface ICollectionService
     {
-        IDataResult<List<Collection>> GetAll();
+        IDataResult<List<Collection>> GetAll(Guid? tenantId = null, Guid? shopId = null, DateTime? fromUtc = null, DateTime? toUtc = null);
         IDataResult<Collection> GetById(Guid id);
-        IDataResult<PagedResult<CollectionDetailDto>> GetDetails(QueryOptions opt);
-        IDataResult<CollectionDetailDto> GetDetailById(Guid id);
+        IDataResult<CollectionDetailDto> GetDetail(Guid id);
 
-        IResult Add(Collection collection);
-        IResult Update(Collection collection);
+        IResult Add(CollectionCreateDto dto, int userId);
+        IResult Update(CollectionUpdateDto dto, int userId);
         IResult Delete(Guid id);
     }
 }

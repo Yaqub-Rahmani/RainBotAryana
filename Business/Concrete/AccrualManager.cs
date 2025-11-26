@@ -17,336 +17,208 @@ using System.Text;
 using System.Threading.Tasks;
 using Core.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Business.ValidationRules.FluentValidation.Accrual;
+using Entities.Dtos.Accrual;
+using System.Globalization;
 
 namespace Business.Concrete
 {
     public class AccrualManager : IAccrualService
     {
-        private readonly IAccrualDal _accrualDal;
-        private readonly IShopDal _shopDal;           // varsayım: mevcut
-        private readonly ITenantDal _tenantDal;       // varsayım: mevcut
-        private readonly IContractDal _contractDal;   // varsayım: mevcut
-        private readonly IMeterReadingDal _meterDal;  // varsayım: mevcut
-
-        public AccrualManager(
-            IAccrualDal accrualDal,
-            IShopDal shopDal,
-            ITenantDal tenantDal,
-            IContractDal contractDal,
-            IMeterReadingDal meterDal)
+        private readonly IAccrualDal _dal;
+        private readonly IAccrualSettlementDal _settlementDal; // varsayılan
+        public AccrualManager(IAccrualDal dal, IAccrualSettlementDal settlementDal)
         {
-            _accrualDal = accrualDal;
-            _shopDal = shopDal;
-            _tenantDal = tenantDal;
-            _contractDal = contractDal;
-            _meterDal = meterDal;
+            _dal = dal;
+            _settlementDal = settlementDal;
         }
 
-        // ------- READS -------
-
         [CacheAspect(10)]
-        public IDataResult<List<Accrual>> GetAll()
-            => new SuccessDataResult<List<Accrual>>(
-                _accrualDal.QueryNoTracking()
-                           .OrderByDescending(x => x.CreatedAtUtc)
-                           .ToList()
-            );
+        public IDataResult<List<Accrual>> GetAll(Guid? shopId = null, Guid? tenantId = null, int? year = null, int? month = null, AccrualStatus? status = null)
+        {
+            var q = _dal.QueryNoTracking();
+
+            if (shopId.HasValue) q = q.Where(x => x.ShopId == shopId.Value);
+            if (tenantId.HasValue) q = q.Where(x => x.TenantId == tenantId.Value);
+            if (year.HasValue) q = q.Where(x => x.Year == year.Value);
+            if (month.HasValue) q = q.Where(x => x.Month == month.Value);
+            if (status.HasValue) q = q.Where(x => x.Status == status.Value);
+
+            return new SuccessDataResult<List<Accrual>>(q.OrderByDescending(x => x.CreatedAtUtc).ToList());
+        }
 
         [CacheAspect(10)]
         public IDataResult<Accrual> GetById(Guid id)
         {
-            var a = _accrualDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
-            return a == null
-                ? new ErrorDataResult<Accrual>(null, "رکورد پیدا نشد.")
-                : new SuccessDataResult<Accrual>(a);
+            var e = _dal.QueryNoTracking()
+                        .Include(x => x.AccrualSettlements)
+                        .FirstOrDefault(x => x.Id == id);
+            return e == null
+                ? new ErrorDataResult<Accrual>(null, "یافت نشد.")
+                : new SuccessDataResult<Accrual>(e);
         }
 
         [CacheAspect(10)]
-        [CacheAspect(10)]
-        public IDataResult<PagedResult<AccrualDetailDto>> GetDetails(QueryOptions opt)
+        public IDataResult<AccrualDetailDto> GetDetail(Guid id)
         {
-            opt ??= new QueryOptions();
+            var e = _dal.QueryNoTracking()
+                        .Include(x => x.AccrualSettlements)
+                        .FirstOrDefault(x => x.Id == id);
+            if (e == null) return new ErrorDataResult<AccrualDetailDto>(null, "یافت نشد.");
 
-            var q = _accrualDal.QueryNoTracking();
-
-            // Dinamik filtreler (shopId, tenantId, kind, status, year, month...)
-            q = q.ApplyFilters(opt.Filters);
-
-            // Arama (Notes üzerinde LIKE)
-            if (!string.IsNullOrWhiteSpace(opt.Search))
+            var settled = e.AccrualSettlements?.Sum(s => s.Amount) ?? 0m;
+            return new SuccessDataResult<AccrualDetailDto>(new AccrualDetailDto
             {
-                var key = opt.Search.Trim();
-                var like = $"%{key}%";
-                q = q.Where(x => x.Notes != null && EF.Functions.Like(x.Notes!, like));
-            }
-
-            // Sıralama (yoksa varsayılan)
-            q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id);
-
-            // --- Sunucu tarafı projeksiyon: sadece ham alanlar ---
-            var qProj = q.Select(a => new
-            {
-                // Accrual
-                a.Id,
-                a.ShopId,
-                a.TenantId,
-                a.ContractId,
-                a.MeterReadingId,
-                a.Kind,
-                a.Year,
-                a.Month,
-                a.CreatedAtUtc,
-                a.Status,
-                a.Amount,
-                a.OutstandingAmount,
-                a.Notes,
-
-                // Relational raw fields (LEFT JOIN otomatik)
-                ShopName = a.Shop != null ? a.Shop.Name : null,
-                TenantName = a.Tenant != null ? a.Tenant.DisplayName : null,
-
-                // Contract'ta Number yok → Version ya da Tarih aralığı
-                ContractVersion = a.Contract != null ? a.Contract.Version : null,
-                ContractStart = a.Contract != null ? (DateOnly?)a.Contract.StartDate : null,
-                ContractEnd = a.Contract != null ? (DateOnly?)a.Contract.EndDate : null,
-
-                // MeterReading'te ReadingNo yok → Year-Month başlığı
-                MRYear = a.MeterReading != null ? (int?)a.MeterReading.Year : null,
-                MRMonth = a.MeterReading != null ? (int?)a.MeterReading.Month : null
+                Id = e.Id,
+                ShopId = e.ShopId,
+                TenantId = e.TenantId,
+                ContractId = e.ContractId,
+                MeterReadingId = e.MeterReadingId,
+                Kind = e.Kind,
+                Year = e.Year,
+                Month = e.Month,
+                CreatedAtUtc = e.CreatedAtUtc,
+                CreatedByUserId = e.CreatedByUserId,
+                UpdatedByUserId = e.UpdatedByUserId,
+                UpdatedAtUtc = e.UpdatedAtUtc,
+                Status = e.Status,
+                Amount = e.Amount,
+                OutstandingAmount = e.OutstandingAmount,
+                Notes = e.Notes,
+                SettlementCount = e.AccrualSettlements?.Count ?? 0,
+                SettledTotal = Math.Round(settled, 2, MidpointRounding.AwayFromZero)
             });
+        }
 
-            var total = qProj.Count();
-
-            var rows = qProj
-                .Skip((opt.Page - 1) * opt.PageSize)
-                .Take(opt.PageSize)
-                .ToList(); // DB’den ham veriler çekildi
-
-            // --- Bellekte güvenli formatlama ve DTO inşası ---
-            var items = rows.Select(r =>
+        [ValidationAspect(typeof(AccrualCreateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualService.Get")]
+        public IResult Add(AccrualCreateDto dto, int userId)
+        {
+            var e = new Accrual
             {
-                // Contract görünen ad: öncelik Version, yoksa tarih aralığı
-                string contractName =
-                    !string.IsNullOrWhiteSpace(r.ContractVersion) ? $"v{r.ContractVersion}"
-                    : (r.ContractStart.HasValue && r.ContractEnd.HasValue
-                        ? $"{r.ContractStart:yyyy-MM-dd}→{r.ContractEnd:yyyy-MM-dd}"
-                        : "");
-
-                // MeterReading görünen ad: YYYY-MM
-                string meterReadingName =
-                    (r.MRYear.HasValue && r.MRMonth.HasValue)
-                        ? $"{r.MRYear}-{r.MRMonth.Value.ToString().PadLeft(2, '0')}"
-                        : "";
-
-                return new AccrualDetailDto
-                {
-                    Id = r.Id,
-                    ShopId = r.ShopId,
-                    TenantId = r.TenantId,
-                    ContractId = r.ContractId,
-                    MeterReadingId = r.MeterReadingId,
-                    Kind = r.Kind.ToString(),
-                    Year = r.Year,
-                    Month = r.Month,
-                    CreatedAtUtc = r.CreatedAtUtc,
-                    Status = r.Status.ToString(),
-                    Amount = r.Amount,
-                    OutstandingAmount = r.OutstandingAmount,
-                    Notes = r.Notes,
-
-                    Shop = new RefDto { Id = r.ShopId, Name = r.ShopName ?? "", Code = null },
-                    Tenant = new RefDto { Id = r.TenantId, Name = r.TenantName ?? "", Code = null },
-                    Contract = new RefDto { Id = r.ContractId, Name = contractName, Code = null },
-                    MeterReading = r.MeterReadingId == null ? null :
-                        new RefDto { Id = r.MeterReadingId.Value, Name = meterReadingName, Code = null }
-                };
-            }).ToList();
-
-            var page = new PagedResult<AccrualDetailDto>
-            {
-                Items = items,
-                Page = opt.Page,
-                PageSize = opt.PageSize,
-                TotalCount = total
+                Id = Guid.NewGuid(),
+                ShopId = dto.ShopId,
+                TenantId = dto.TenantId,
+                ContractId = dto.ContractId,
+                MeterReadingId = dto.MeterReadingId,
+                Kind = dto.Kind,
+                Year = dto.Year,
+                Month = dto.Month,
+                Amount = Math.Round(dto.Amount, 2, MidpointRounding.AwayFromZero),
+                OutstandingAmount = Math.Round(dto.Amount, 2, MidpointRounding.AwayFromZero),
+                Notes = dto.Notes,
+                Status = AccrualStatus.Open,
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByUserId = userId
             };
 
-            return new SuccessDataResult<PagedResult<AccrualDetailDto>>(page);
+            _dal.Add(e);
+            return new SuccessResult("ثبت شد.");
         }
 
-
-        [CacheAspect(10)]
-        public IDataResult<AccrualDetailDto> GetDetailById(Guid id)
+        [ValidationAspect(typeof(AccrualUpdateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualService.Get")]
+        public IResult Update(AccrualUpdateDto dto, int userId)
         {
-            var data = _accrualDal.QueryNoTracking()
-                .Where(a => a.Id == id)
-                .Select(a => new
-                {
-                    // Accrual fields
-                    a.Id,
-                    a.ShopId,
-                    a.TenantId,
-                    a.ContractId,
-                    a.MeterReadingId,
-                    a.Kind,
-                    a.Year,
-                    a.Month,
-                    a.CreatedAtUtc,
-                    a.Status,
-                    a.Amount,
-                    a.OutstandingAmount,
-                    a.Notes,
+            var e = _dal.Get(x => x.Id == dto.Id);
+            if (e == null) return new ErrorResult("یافت نشد.");
 
-                    // Shop/Tenant (left join)
-                    ShopName = a.Shop != null ? a.Shop.Name : null,
-                    TenantName = a.Tenant != null ? a.Tenant.DisplayName : null,
+            e.ShopId = dto.ShopId;
+            e.TenantId = dto.TenantId;
+            e.ContractId = dto.ContractId;
+            e.MeterReadingId = dto.MeterReadingId;
+            e.Kind = dto.Kind;
+            e.Year = dto.Year;
+            e.Month = dto.Month;
+            e.Amount = Math.Round(dto.Amount, 2, MidpointRounding.AwayFromZero);
+            e.OutstandingAmount = Math.Round(dto.OutstandingAmount, 2, MidpointRounding.AwayFromZero); // dikkat: iş kuralı gereği sınırlanabilir
+            e.Notes = dto.Notes;
+            e.Status = dto.Status;
+            e.UpdatedByUserId = userId;
+            e.UpdatedAtUtc = DateTime.UtcNow;
 
-                    // Contract (left join)
-                    ContractVersion = a.Contract != null ? a.Contract.Version : null,
-                    ContractStart = a.Contract != null ? (DateOnly?)a.Contract.StartDate : null,
-                    ContractEnd = a.Contract != null ? (DateOnly?)a.Contract.EndDate : null,
+            // Tutarlılık: Outstanding > Amount ise düzelt
+            if (e.OutstandingAmount > e.Amount) e.OutstandingAmount = e.Amount;
 
-                    // MeterReading (left join)
-                    MRYear = a.MeterReading != null ? (int?)a.MeterReading.Year : null,
-                    MRMonth = a.MeterReading != null ? (int?)a.MeterReading.Month : null
-                })
-                .FirstOrDefault();
-
-            if (data == null)
-                return new ErrorDataResult<AccrualDetailDto>(null, "رکورد پیدا نشد.");
-
-            // Bellekte güvenle formatla
-            var contractName =
-                data.ContractVersion?.Length > 0
-                    ? $"v{data.ContractVersion}"
-                    : (data.ContractStart.HasValue && data.ContractEnd.HasValue
-                           ? $"{data.ContractStart:yyyy-MM-dd}→{data.ContractEnd:yyyy-MM-dd}"
-                           : "");
-
-            var meterReadingName =
-                (data.MRYear.HasValue && data.MRMonth.HasValue)
-                    ? $"{data.MRYear}-{data.MRMonth.Value.ToString().PadLeft(2, '0')}"
-                    : "";
-
-            var dto = new AccrualDetailDto
-            {
-                Id = data.Id,
-                ShopId = data.ShopId,
-                TenantId = data.TenantId,
-                ContractId = data.ContractId,
-                MeterReadingId = data.MeterReadingId,
-                Kind = data.Kind.ToString(),
-                Year = data.Year,
-                Month = data.Month,
-                CreatedAtUtc = data.CreatedAtUtc,
-                Status = data.Status.ToString(),
-                Amount = data.Amount,
-                OutstandingAmount = data.OutstandingAmount,
-                Notes = data.Notes,
-
-                Shop = new RefDto { Id = data.ShopId, Name = data.ShopName ?? "", Code = null },
-                Tenant = new RefDto { Id = data.TenantId, Name = data.TenantName ?? "", Code = null },
-                Contract = new RefDto { Id = data.ContractId, Name = contractName, Code = null },
-                MeterReading = data.MeterReadingId == null ? null :
-                               new RefDto { Id = data.MeterReadingId.Value, Name = meterReadingName, Code = null }
-            };
-
-            return new SuccessDataResult<AccrualDetailDto>(dto);
+            _dal.Update(e);
+            return new SuccessResult("بروز شد.");
         }
 
-        // ------- WRITES -------
-
-        [SecuredOperation("accrual.write,admin")]
-        [ValidationAspect(typeof(AccrualValidator))]
-        [CacheRemoveAspect("IAccrualService.Get")]
-        public IResult Add(Accrual accrual)
-        {
-            if (accrual.Amount < 0) return new ErrorResult("مبلغ نمی‌تواند منفی باشد.");
-            if (accrual.OutstandingAmount < 0) return new ErrorResult("بدهی باقیمانده نمی‌تواند منفی باشد.");
-
-            // Varsayılan: Outstanding yoksa Amount’a eşitle
-            if (accrual.OutstandingAmount == 0 && accrual.Amount > 0)
-                accrual.InitializeOutstanding();
-
-            _accrualDal.Add(accrual);
-            return new SuccessResult("ثبت بدهی انجام شد.");
-        }
-
-        [SecuredOperation("accrual.write,admin")]
-        [ValidationAspect(typeof(AccrualValidator))]
-        [CacheRemoveAspect("IAccrualService.Get")]
-        public IResult Update(Accrual accrual)
-        {
-            var current = _accrualDal.Get(x => x.Id == accrual.Id);
-            if (current == null) return new ErrorResult("رکورد پیدا نشد.");
-
-            // Temel alanlar
-            current.ShopId = accrual.ShopId;
-            current.TenantId = accrual.TenantId;
-            current.ContractId = accrual.ContractId;
-            current.MeterReadingId = accrual.MeterReadingId;
-            current.Kind = accrual.Kind;
-            current.Year = accrual.Year;
-            current.Month = accrual.Month;
-            current.Amount = accrual.Amount;
-            current.Notes = accrual.Notes;
-
-            // Outstanding mantığı: Amount düşerse üstte kalıyorsa kesmeyelim; manual edit’e izin veriyorsan doğrula
-            if (accrual.OutstandingAmount >= 0)
-                current.OutstandingAmount = accrual.OutstandingAmount;
-
-            // Status otomatik ayar
-            current.Status = current.OutstandingAmount == 0 ? AccrualStatus.Settled :
-                             (current.OutstandingAmount == current.Amount ? AccrualStatus.Open : AccrualStatus.PartiallySettled);
-
-            _accrualDal.Update(current);
-            return new SuccessResult("ویرایش انجام شد.");
-        }
-
-        [SecuredOperation("accrual.write,admin")]
-        [CacheRemoveAspect("IAccrualService.Get")]
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualService.Get")]
         public IResult Delete(Guid id)
         {
-            var entity = _accrualDal.Get(x => x.Id == id);
-            if (entity == null) return new ErrorResult("یافت نشد.");
-
-            _accrualDal.Delete(entity);
-            return new SuccessResult("حذف انجام شد.");
-        }
-
-        [SecuredOperation("accrual.settle,admin")]
-        [CacheRemoveAspect("IAccrualService.Get")]
-        public IResult InitializeOutstanding(Guid id)
-        {
-            var e = _accrualDal.Get(x => x.Id == id);
+            var e = _dal.Get(x => x.Id == id);
             if (e == null) return new ErrorResult("یافت نشد.");
-            e.InitializeOutstanding();
-            e.Status = e.OutstandingAmount == 0 ? AccrualStatus.Settled : AccrualStatus.PartiallySettled;
-            _accrualDal.Update(e);
-            return new SuccessResult("بدهی اولیه تنظیم شد.");
-        }
-
-        [SecuredOperation("accrual.settle,admin")]
-        [CacheRemoveAspect("IAccrualService.Get")]
-        public IResult ApplySettlement(Guid id, decimal amount)
-        {
-            if (amount <= 0) return new ErrorResult("مبلغ تسویه باید بزرگتر از صفر باشد.");
-
-            var e = _accrualDal.Get(x => x.Id == id);
-            if (e == null) return new ErrorResult("یافت نشد.");
-            if (e.OutstandingAmount == 0) return new ErrorResult("این بدهی قبلاً تسویه شده است.");
-
             try
             {
-                e.ApplySettlement(amount);
-                _accrualDal.Update(e);
-                return new SuccessResult("تسویه با موفقیت انجام شد.");
+                _dal.Delete(e);
+                return new SuccessResult("حذف شد.");
             }
-            catch (Exception)
+            catch (DbUpdateException)
             {
-                return new ErrorResult("مبلغ تسویه نامعتبر است.");
+                return new ErrorResult("به علت وابستگی داده‌ها حذف ممکن نیست.");
             }
+        }
+
+        [ValidationAspect(typeof(AccrualSettleValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualService.Get")]
+        public IResult Settle(AccrualSettleDto dto, int userId)
+        {
+            var e = _dal.Get(x => x.Id == dto.AccrualId);
+            if (e == null) return new ErrorResult("یافت نشد.");
+            if (e.Status == AccrualStatus.Settled) return new ErrorResult("این بدهی قبلاً تسویه شده است.");
+
+            // Kayıt altı: settlement entity varsayıyoruz
+            var settlement = new AccrualSettlement
+            {
+                Id = Guid.NewGuid(),
+                AccrualId = e.Id,
+                Amount = Math.Round(dto.Amount, 2, MidpointRounding.AwayFromZero),
+                Notes = dto.Note,
+                SettledAtUtc = DateTime.UtcNow,
+                SettledByUserId = userId
+            };
+            _settlementDal.Add(settlement);
+
+            // Domain metodunu kullan
+            e.ApplySettlement(settlement.Amount);
+            e.UpdatedByUserId = userId;
+            e.UpdatedAtUtc = DateTime.UtcNow;
+
+            _dal.Update(e);
+
+            // Rakamlar İngilizce: InvariantCulture ile biçimlendir
+            var amountStr = settlement.Amount.ToString(CultureInfo.InvariantCulture);
+            return new SuccessResult($"ثبت تسویه به مبلغ {amountStr} انجام شد.");
+        }
+
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualService.Get")]
+        public IResult Reopen(Guid id, int userId)
+        {
+            var e = _dal.Get(x => x.Id == id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+
+            e.Status = AccrualStatus.Open;
+            e.OutstandingAmount = e.Amount;
+            e.UpdatedByUserId = userId;
+            e.UpdatedAtUtc = DateTime.UtcNow;
+
+            _dal.Update(e);
+            return new SuccessResult("بدهی مجدداً باز شد.");
+        }
+
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualService.Get")]
+        public IResult RecalculateOutstanding(Guid id)
+        {
+            var e = _dal.Query().Include(x => x.AccrualSettlements).FirstOrDefault(x => x.Id == id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+
+            var settled = e.AccrualSettlements?.Sum(s => s.Amount) ?? 0m;
+            e.OutstandingAmount = Math.Round(Math.Max(0m, e.Amount - settled), 2, MidpointRounding.AwayFromZero);
+            e.Status = e.OutstandingAmount == 0 ? AccrualStatus.Settled : (settled == 0 ? AccrualStatus.Open : AccrualStatus.PartiallySettled);
+
+            _dal.Update(e);
+            return new SuccessResult("محاسبه‌ی بدهی باقی‌مانده بروز شد.");
         }
     }
 }

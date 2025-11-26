@@ -12,6 +12,6 @@ namespace DataAccess.Abstract
     {
         IQueryable<Address> Query();
         IQueryable<Address> QueryNoTracking();
-        IList<Address> GetByOwner(AddressOwnerType ownerType, Guid ownerId);
+        IList<Address> GetByOwner(MediaOwnerType ownerType, Guid ownerId);
     }
 }

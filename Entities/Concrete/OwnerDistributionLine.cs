@@ -1,28 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Core.Entities;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //    OwnerDistributionLine(isteğe bağlı, kategori bazlı satır)
-    //Eğer raporlamada daha ayrıntı istersen, yukarıdaki snapshot’a ek olarak her parça için satır açabilirsin.
-    //(Opsiyonel—temel kullanımda OwnerDistribution yeterlidir.)
-
+    // OwnerDistributionLine (isteğe bağlı, kategori bazlı satır)
+    // Daha detaylı raporlama için OwnerDistribution’a bağlı satırlar.
     public enum DistributionPart
     {
-        Tax = 1,        // Maliye
-        Zakat = 2,      // Zekat
-        Charity = 3,    // Sadaka
+        Tax = 1,         // Maliye
+        Zakat = 2,       // Zekat
+        Charity = 3,     // Sadaka
         OwnerReserve = 4,// Market Sahibi Rezervesi
         FamilyPool = 5   // Aile havuzu
     }
 
-    public class OwnerDistributionLine: IEntity
+    public class OwnerDistributionLine : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -41,5 +37,10 @@ namespace Entities.Concrete
 
         [MaxLength(300)]
         public string? Notes { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(OwnerDistributionId))]
+        public OwnerDistribution OwnerDistribution { get; set; } = null!;
     }
 }

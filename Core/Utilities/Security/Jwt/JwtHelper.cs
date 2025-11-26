@@ -47,10 +47,15 @@ namespace Business.Security.Jwt
         private static IEnumerable<Claim> BuildClaims(User user, List<OperationClaim> roles)
         {
             var list = new List<Claim>
-            {
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}")
-            };
+    {
+        // Kullanıcı kimliği (id)
+       // new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()), // JWT standard claim
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),   // .NET standard claim
+
+        // Kullanıcı bilgileri
+        new Claim(ClaimTypes.Email, user.Email),
+        new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}")
+    };
 
             if (roles != null)
             {

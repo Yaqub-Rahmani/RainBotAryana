@@ -1,8 +1,9 @@
-﻿using Core.Utilities.Paging;
+﻿using Business.ValidationRules.FluentValidation.Contract;
+using Core.Utilities.Paging;
 using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
-using Entities.Dtos;
+using Entities.Dtos.contract;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,20 +14,18 @@ namespace Business.Abstract
 {
     public interface IContractService
     {
-        // Okuma
-        IDataResult<List<Contract>> GetAll();
+        IDataResult<List<Contract>> GetAll(bool includeArchived = false);
         IDataResult<Contract> GetById(Guid id);
-        IDataResult<PagedResult<ContractDetailDto>> GetDetails(QueryOptions opt);
-        IDataResult<ContractDetailDto> GetDetailById(Guid id);
+        IDataResult<ContractDetailDto> GetDetail(Guid id);
 
-        // Yazma
-        IResult Add(Contract contract);
-        IResult Update(Contract contract);
+        IDataResult<List<ContractListItemDto>> GetListItems();
+
+        IResult Add(ContractCreateDto dto, int userId);
+        IResult Update(ContractUpdateDto dto, int userId);
         IResult Delete(Guid id);
 
-        // İşlemsel
-        IResult Archive(Guid id, string? reason);
-        IResult Activate(Guid id);
-        IDataResult<bool> CheckOverlap(Guid shopId, Guid tenantId, DateOnly start, DateOnly end, Guid? excludeId = null);
+        // Durum işlemleri
+        IResult Archive(Guid id, int userId, string? reason);
+        IResult Unarchive(Guid id, int userId);
     }
 }

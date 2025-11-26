@@ -16,316 +16,355 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Extensions;
+using Business.ValidationRules.FluentValidation.MeterReading;
+using Entities.Dtos.MeterReadings;
+using Microsoft.EntityFrameworkCore;
+using Core.Utilities.KabulDateTime;
+using Entities.Dtos.Accrual;
 
 namespace Business.Concrete
 {
     public class MeterReadingManager : IMeterReadingService
     {
-        private readonly IMeterReadingDal _readingDal;
-        private readonly IShopDal _shopDal;
-        private readonly IAccrualDal _accrualDal;
+        private readonly IMeterReadingDal _meterReadingDal;
         private readonly IContractDal _contractDal;
+        private readonly ITimeProvider _timeProvider;
+        private readonly IAccrualDal _accrualDal;
+        private readonly IAccrualService _accrualService;
+        private readonly IContractService _contractService;
 
         public MeterReadingManager(
-            IMeterReadingDal readingDal,
-            IShopDal shopDal,
+            IMeterReadingDal meterReadingDal,
+            IContractDal contractDal,
+            ITimeProvider timeProvider,
             IAccrualDal accrualDal,
-            IContractDal contractDal)
+            IAccrualService accrualService,
+            IContractService contractService)
         {
-            _readingDal = readingDal;
-            _shopDal = shopDal;
-            _accrualDal = accrualDal;
+            _meterReadingDal = meterReadingDal;
             _contractDal = contractDal;
+            _timeProvider = timeProvider;
+            _accrualDal = accrualDal;
+            _accrualService = accrualService;
+            _contractService = contractService;
         }
 
-        // ---------- Helpers ----------
-        private static DateOnly FirstOfMonth(int year, int month) => new DateOnly(year, month, 1);
-        private static DateOnly LastOfMonth(int year, int month) => FirstOfMonth(year, month).AddMonths(1).AddDays(-1);
-
-        private Contract? FindCoveringContract(Guid shopId, int year, int month)
-        {
-            var start = FirstOfMonth(year, month);
-            var end = LastOfMonth(year, month);
-            return _contractDal.QueryNoTracking()
-                .Where(c => c.ShopId == shopId && c.Status == ContractStatus.Active
-                            && c.StartDate <= end && c.EndDate >= start)
-                .OrderByDescending(c => c.StartDate)
-                .FirstOrDefault();
-        }
-
-        private Accrual? FindExistingAccrual(Guid shopId, Guid tenantId, Guid contractId, int year, int month)
-        {
-            return _accrualDal.Query().FirstOrDefault(a =>
-                a.ShopId == shopId &&
-                a.TenantId == tenantId &&
-                a.ContractId == contractId &&
-                a.Year == year && a.Month == month &&
-                a.Kind == AccrualKind.Electricity);
-        }
-
-        private void EnsureUniquePeriod(MeterReading r, Guid? excludeId = null)
-        {
-            var q = _readingDal.QueryNoTracking().Where(x => x.ShopId == r.ShopId && x.Year == r.Year && x.Month == r.Month);
-            if (excludeId.HasValue) q = q.Where(x => x.Id != excludeId.Value);
-            if (q.Any())
-                throw new InvalidOperationException("برای این فروشگاه در این دوره قبلاً قرائت ثبت شده است.");
-        }
-
-        private MeterReadingDetailDto ProjectDetail(MeterReading r)
-        {
-            var shop = _shopDal.QueryNoTracking().FirstOrDefault(s => s.Id == r.ShopId);
-            var accr = _accrualDal.QueryNoTracking()
-                        .FirstOrDefault(a => a.MeterReadingId == r.Id && a.Kind == AccrualKind.Electricity);
-
-            return new MeterReadingDetailDto
-            {
-                Id = r.Id,
-                ShopId = r.ShopId,
-                ShopName = shop?.Name ?? shop?.Name ?? "", // Shop.Name varsayımı; yoksa düzenle
-                Year = r.Year,
-                Month = r.Month,
-                ReadingDate = r.ReadingDate,
-                PreviousIndex = r.PreviousIndex,
-                CurrentIndex = r.CurrentIndex,
-                ConsumptionKwh = Math.Max(0, r.CurrentIndex - r.PreviousIndex),
-                UnitPrice = r.UnitPrice,
-                ReserveRate = r.ReserveRate,
-                NetAmount = Math.Round(Math.Max(0, r.CurrentIndex - r.PreviousIndex) * r.UnitPrice, 2, MidpointRounding.AwayFromZero),
-                ReserveAmount = Math.Round(Math.Round(Math.Max(0, r.CurrentIndex - r.PreviousIndex) * r.UnitPrice, 2, MidpointRounding.AwayFromZero) * r.ReserveRate, 2, MidpointRounding.AwayFromZero),
-                TotalBilled = Math.Round(Math.Max(0, r.CurrentIndex - r.PreviousIndex) * r.UnitPrice, 2, MidpointRounding.AwayFromZero)
-                              + Math.Round(Math.Round(Math.Max(0, r.CurrentIndex - r.PreviousIndex) * r.UnitPrice, 2, MidpointRounding.AwayFromZero) * r.ReserveRate, 2, MidpointRounding.AwayFromZero),
-                IsFinalized = r.IsFinalized,
-                Notes = r.Notes,
-                AccrualId = accr?.Id,
-                AccrualAmount = accr?.Amount,
-                AccrualOutstanding = accr?.OutstandingAmount,
-                AccrualStatus = accr?.Status.ToString()
-            };
-        }
-
-        // Elektrik tahakkuku oluştur/güncelle
-        private void UpsertElectricityAccrual(MeterReading r)
-        {
-            var contract = FindCoveringContract(r.ShopId, r.Year, r.Month);
-            if (contract == null)
-                throw new InvalidOperationException("این دوره برای فروشگاه قرارداد فعالی یافت نشد.");
-
-            var amount = Math.Round((Math.Max(0, r.CurrentIndex - r.PreviousIndex) * r.UnitPrice), 2, MidpointRounding.AwayFromZero);
-            var reserve = Math.Round(amount * r.ReserveRate, 2, MidpointRounding.AwayFromZero);
-            var total = amount + reserve;
-
-            var existing = _accrualDal.Query().FirstOrDefault(a => a.MeterReadingId == r.Id);
-            if (existing == null)
-            {
-                var acc = new Accrual
-                {
-                    Id = Guid.NewGuid(),
-                    ShopId = r.ShopId,
-                    TenantId = contract.TenantId,
-                    ContractId = contract.Id,
-                    MeterReadingId = r.Id,
-                    Kind = AccrualKind.Electricity,
-                    Year = r.Year,
-                    Month = r.Month,
-                    CreatedAtUtc = DateTime.UtcNow,
-                    Status = AccrualStatus.Open,
-                    Amount = total
-                };
-                acc.InitializeOutstanding();
-                _accrualDal.Add(acc);
-            }
-            else
-            {
-                // Eğer kısmen/tam kapalıysa, outstanding’i delta kadar ayarla
-                var delta = total - existing.Amount;
-                existing.Amount = total;
-                existing.OutstandingAmount = Math.Max(0, Math.Round(existing.OutstandingAmount + delta, 2, MidpointRounding.AwayFromZero));
-                existing.Status = existing.OutstandingAmount == 0 ? AccrualStatus.Settled :
-                                  (existing.OutstandingAmount == existing.Amount ? AccrualStatus.Open : AccrualStatus.PartiallySettled);
-                _accrualDal.Update(existing);
-            }
-        }
-
-        private void TryRemoveAccrualIfNoSettlements(MeterReading r)
-        {
-            var existing = _accrualDal.Query().FirstOrDefault(a => a.MeterReadingId == r.Id);
-            if (existing == null) return;
-
-            var hasSettlement = existing.OutstandingAmount != existing.Amount;
-            if (hasSettlement)
-                throw new InvalidOperationException("برای این قرائت تسویه‌ای انجام شده است؛ حذف/بازگشت ممکن نیست.");
-
-            _accrualDal.Delete(existing);
-        }
-
-        // ---------- Okumalar ----------
         [CacheAspect(10)]
-        public IDataResult<List<MeterReading>> GetAll(Guid? shopId = null, int? year = null, int? month = null, bool? finalized = null)
+        public IDataResult<List<MeterReading>> GetAll(Guid? shopId = null, Guid? contractId = null, int? year = null, int? month = null, bool? finalized = null)
         {
-            var q = _readingDal.QueryNoTracking();
-            if (shopId.HasValue && shopId.Value != Guid.Empty) q = q.Where(x => x.ShopId == shopId.Value);
+            var q = _meterReadingDal.QueryNoTracking();
+            if (shopId.HasValue) q = q.Where(x => x.ShopId == shopId.Value);
+            if (contractId.HasValue) q = q.Where(x => x.ContractId == contractId.Value);
             if (year.HasValue) q = q.Where(x => x.Year == year.Value);
             if (month.HasValue) q = q.Where(x => x.Month == month.Value);
             if (finalized.HasValue) q = q.Where(x => x.IsFinalized == finalized.Value);
-
-            var list = q.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month).ThenByDescending(x => x.ReadingDate).ToList();
-            return new SuccessDataResult<List<MeterReading>>(list);
+            return new SuccessDataResult<List<MeterReading>>(q.OrderByDescending(x => x.ReadingDate).ToList());
         }
 
         [CacheAspect(10)]
         public IDataResult<MeterReading> GetById(Guid id)
         {
-            var e = _readingDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
+            var e = _meterReadingDal.Get(x => x.Id == id);
             return e == null ? new ErrorDataResult<MeterReading>(null, "یافت نشد.") : new SuccessDataResult<MeterReading>(e);
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<MeterReadingDetailDto>> GetDetails(QueryOptions opt, Guid? shopId = null, int? year = null, int? month = null, bool? finalized = null)
+        public IDataResult<MeterReadingDetailDto> GetDetail(Guid id)
         {
-            opt ??= new QueryOptions();
-            var q = _readingDal.QueryNoTracking();
-
-            if (shopId.HasValue && shopId.Value != Guid.Empty) q = q.Where(x => x.ShopId == shopId.Value);
-            if (year.HasValue) q = q.Where(x => x.Year == year.Value);
-            if (month.HasValue) q = q.Where(x => x.Month == month.Value);
-            if (finalized.HasValue) q = q.Where(x => x.IsFinalized == finalized.Value);
-
-            q = q.ApplyFilters(opt.Filters);
-            if (!string.IsNullOrWhiteSpace(opt.Search))
+            var e = _meterReadingDal.Get(x => x.Id == id);
+            if (e == null) return new ErrorDataResult<MeterReadingDetailDto>(null, "یافت نشد.");
+            var dto = new MeterReadingDetailDto
             {
-                var key = opt.Search.Trim();
-                q = q.Where(x => (x.Notes ?? "").Contains(key));
+                Id = e.Id,
+                ShopId = e.ShopId,
+                ContractId = e.ContractId,
+                Year = e.Year,
+                Month = e.Month,
+                ReadingDate = e.ReadingDate,
+                PreviousIndex = e.PreviousIndex,
+                CurrentIndex = e.CurrentIndex,
+                ConsumptionKwh = Math.Max(0, e.CurrentIndex - e.PreviousIndex),
+                UnitPrice = e.UnitPrice,
+                NetAmount = Math.Round(Math.Max(0, e.CurrentIndex - e.PreviousIndex) * e.UnitPrice, 2, MidpointRounding.AwayFromZero),
+                ReserveRate = e.ReserveRate,
+                ReserveAmount = Math.Round(Math.Round(Math.Max(0, e.CurrentIndex - e.PreviousIndex) * e.UnitPrice, 2, MidpointRounding.AwayFromZero) * e.ReserveRate, 2, MidpointRounding.AwayFromZero),
+                TotalBilled = Math.Round(Math.Round(Math.Max(0, e.CurrentIndex - e.PreviousIndex) * e.UnitPrice, 2, MidpointRounding.AwayFromZero) * (1 + e.ReserveRate), 2, MidpointRounding.AwayFromZero),
+                IsFinalized = e.IsFinalized,
+                FinalizedByUserId = e.FinalizedByUserId,
+                FinalizedAt = e.FinalizedAt,
+                CreatedByUserId = e.CreatedByUserId,
+                UpdatedByUserId = e.UpdatedByUserId,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt,
+                Notes = e.Notes,
+                RowVersion = e.RowVersion
+            };
+            return new SuccessDataResult<MeterReadingDetailDto>(dto);
+        }
+
+        [ValidationAspect(typeof(MeterReadingCreateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IMeterReadingService.Get")]
+        public IResult Add(MeterReadingCreateDto dto, int userId)
+        {
+            // Kabul zaman dilimine göre "şu an"
+            var nowUtc = _timeProvider.UtcNow();
+            var todayGregorian = _timeProvider.Today();          // DateOnly (Kabul, Gregorian)
+            var (py, pm, _) = _timeProvider.TodayPersian();      // Örn: (1404, 8, 15)
+
+
+            var e = new MeterReading
+            {
+                Id = dto.MeterReadingId,
+                ShopId = dto.ShopId,
+                ContractId = dto.ContractId,
+                Year = py,                // örn. 1404
+                Month = pm,               // örn. 8
+                ReadingDate = todayGregorian,
+                PreviousIndex = Math.Round(dto.PreviousIndex, 3, MidpointRounding.AwayFromZero),
+                CurrentIndex = Math.Round(dto.CurrentIndex, 3, MidpointRounding.AwayFromZero),
+                UnitPrice = Math.Round(dto.UnitPrice, 4, MidpointRounding.AwayFromZero),
+                ReserveRate = dto.ReserveRate,
+                Notes = dto.Notes,
+                CreatedByUserId = userId,
+                CreatedAt = nowUtc,
+                IsFinalized = false,
+            };
+            _meterReadingDal.Add(e);
+
+            if (dto.IsConfirmed)
+            {
+                CreateAccrualsForMeterReading(e, userId);
             }
 
-            q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month);
-
-            var items = q.Select(r => ProjectDetail(r));
-
-            var total = items.Count();
-            var pageItems = items.ApplyPaging(opt.Page, opt.PageSize).ToList();
-
-            return new SuccessDataResult<PagedResult<MeterReadingDetailDto>>(
-                new PagedResult<MeterReadingDetailDto>
-                {
-                    Items = pageItems,
-                    Page = opt.Page,
-                    PageSize = opt.PageSize,
-                    TotalCount = total
-                });
+            return new SuccessResult("ثبت شد.");
         }
 
-        [CacheAspect(10)]
-        public IDataResult<MeterReadingDetailDto> GetDetailById(Guid id)
+        [ValidationAspect(typeof(MeterReadingUpdateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IMeterReadingService.Get")]
+        public IResult Update(MeterReadingUpdateDto dto, int userId)
         {
-            var r = _readingDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
-            if (r == null) return new ErrorDataResult<MeterReadingDetailDto>(null, "یافت نشد.");
-            return new SuccessDataResult<MeterReadingDetailDto>(ProjectDetail(r));
+            var e = _meterReadingDal.Get(x => x.Id == dto.Id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+            if (e.IsFinalized) return new ErrorResult("قرائت نهایی شده است و قابل ویرایش نیست.");
+
+            // Concurrency check
+            if (!e.RowVersion.SequenceEqual(dto.RowVersion))
+                return new ErrorResult("داده همزمان تغییر کرده است. لطفاً دوباره بارگذاری کنید.");
+
+            e.ShopId = dto.ShopId;
+            e.ContractId = dto.ContractId;
+            e.PreviousIndex = Math.Round(dto.PreviousIndex, 3, MidpointRounding.AwayFromZero);
+            e.CurrentIndex = Math.Round(dto.CurrentIndex, 3, MidpointRounding.AwayFromZero);
+            e.UnitPrice = Math.Round(dto.UnitPrice, 4, MidpointRounding.AwayFromZero);
+            e.ReserveRate = dto.ReserveRate;
+            e.Notes = dto.Notes;
+            e.UpdatedByUserId = userId;
+            e.UpdatedAt = DateTimeOffset.UtcNow;
+
+            try
+            {
+                _meterReadingDal.Update(e);
+                return new SuccessResult("بروز شد.");
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new ErrorResult("داده همزمان تغییر کرده است. لطفاً دوباره بارگذاری کنید.");
+            }
         }
 
-        // ---------- Yazmalar ----------
-        [SecuredOperation("meterreading.write,admin")]
-        [ValidationAspect(typeof(MeterReadingValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IMeterReadingService.Get")]
-        public IResult Add(MeterReading reading)
-        {
-            if (_shopDal.Get(x => x.Id == reading.ShopId) == null)
-                return new ErrorResult("فروشگاه یافت نشد.");
-
-            EnsureUniquePeriod(reading);
-            _readingDal.Add(reading);
-            return new SuccessResult("قرائت ثبت شد.");
-        }
-
-        [SecuredOperation("meterreading.write,admin")]
-        [ValidationAspect(typeof(MeterReadingValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IMeterReadingService.Get")]
-        public IResult Update(MeterReading reading)
-        {
-            var current = _readingDal.Get(x => x.Id == reading.Id);
-            if (current == null) return new ErrorResult("یافت نشد.");
-            if (current.IsFinalized) return new ErrorResult("این قرائت نهایی شده است و قابل ویرایش نیست.");
-
-            EnsureUniquePeriod(reading, reading.Id);
-
-            current.ShopId = reading.ShopId;
-            current.Year = reading.Year;
-            current.Month = reading.Month;
-            current.ReadingDate = reading.ReadingDate;
-            current.PreviousIndex = reading.PreviousIndex;
-            current.CurrentIndex = reading.CurrentIndex;
-            current.UnitPrice = reading.UnitPrice;
-            current.ReserveRate = reading.ReserveRate;
-            current.Notes = reading.Notes;
-
-            _readingDal.Update(current);
-            return new SuccessResult("قرائت بروزرسانی شد.");
-        }
-
-        [SecuredOperation("meterreading.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IMeterReadingService.Get")]
+        [TransactionScopeAspect, CacheRemoveAspect("IMeterReadingService.Get")]
         public IResult Delete(Guid id)
         {
-            var r = _readingDal.Get(x => x.Id == id);
-            if (r == null) return new ErrorResult("یافت نشد.");
-            if (r.IsFinalized) return new ErrorResult("قرائت نهایی شده قابل حذف نیست.");
-
-            // Eğer bu reading’e bağlı Accrual varsa ve settlement yoksa kaldır
-            TryRemoveAccrualIfNoSettlements(r);
-
-            _readingDal.Delete(r);
+            var e = _meterReadingDal.Query().Include(x => x.Allocations).Include(x => x.Accruals).FirstOrDefault(x => x.Id == id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+            if (e.IsFinalized) return new ErrorResult("به علت نهایی شدن، حذف ممکن نیست.");
+            if ((e.Allocations?.Any() ?? false) || (e.Accruals?.Any() ?? false))
+                return new ErrorResult("به علت وابستگی داده‌ها حذف ممکن نیست.");
+            _meterReadingDal.Delete(e);
             return new SuccessResult("حذف شد.");
         }
 
-        // ---------- İşlemsel ----------
-        [SecuredOperation("meterreading.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IMeterReadingService.Get")]
-        public IResult Finalize(Guid id)
+        [TransactionScopeAspect, CacheRemoveAspect("IMeterReadingService.Get")]
+        public IResult Finalize(Guid id, int userId)
         {
-            var r = _readingDal.Get(x => x.Id == id);
-            if (r == null) return new ErrorResult("یافت نشد.");
-            if (r.IsFinalized) return new SuccessResult("پیش‌تر نهایی شده است.");
+            var e = _meterReadingDal.Get(x => x.Id == id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+            if (e.IsFinalized) return new ErrorResult("قبلاً نهایی شده است.");
 
-            // Accrual üret/güncelle
-            UpsertElectricityAccrual(r);
-
-            r.IsFinalized = true;
-            _readingDal.Update(r);
-            return new SuccessResult("قرائت نهایی شد و بدهی برق ثبت گردید.");
+            e.IsFinalized = true;
+            e.FinalizedByUserId = userId;
+            e.FinalizedAt = DateTimeOffset.UtcNow;
+            _meterReadingDal.Update(e);
+            return new SuccessResult("نهایی شد.");
         }
 
-        [SecuredOperation("meterreading.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IMeterReadingService.Get")]
-        public IResult Unfinalize(Guid id)
+        [TransactionScopeAspect, CacheRemoveAspect("IMeterReadingService.Get")]
+        public IResult Unfinalize(Guid id, int userId)
         {
-            var r = _readingDal.Get(x => x.Id == id);
-            if (r == null) return new ErrorResult("یافت نشد.");
-            if (!r.IsFinalized) return new SuccessResult("قرائت پیش‌تر باز بوده است.");
+            var e = _meterReadingDal.Get(x => x.Id == id);
+            if (e == null) return new ErrorResult("یافت نشد.");
+            // İş kuralı: settlement/accuarl varsa iptal etme
+            if ((e.Accruals?.Any() ?? false) || (e.Allocations?.Any() ?? false))
+                return new ErrorResult("به علت وابستگی‌ها امکان بازگشایی نیست.");
 
-            // Accrual varsa ve settlement yoksa kaldır; varsa settlement -> engelle
-            TryRemoveAccrualIfNoSettlements(r);
-
-            r.IsFinalized = false;
-            _readingDal.Update(r);
-            return new SuccessResult("وضعیت قرائت به حالت بازگشت.");
+            e.IsFinalized = false;
+            e.FinalizedByUserId = null;
+            e.FinalizedAt = null;
+            e.UpdatedByUserId = userId;
+            e.UpdatedAt = DateTimeOffset.UtcNow;
+            _meterReadingDal.Update(e);
+            return new SuccessResult("بازگشایی شد.");
         }
 
-        [SecuredOperation("meterreading.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IMeterReadingService.Get")]
-        public IResult SyncAccrual(Guid id)
+        public IDataResult<MeterReadingNewContextDto> GetNewContext(Guid contractId)
         {
-            var r = _readingDal.Get(x => x.Id == id);
-            if (r == null) return new ErrorResult("یافت نشد.");
+            var contract = _contractDal
+                .QueryNoTracking()
+                .SingleOrDefault(c => c.Id == contractId);
 
-            UpsertElectricityAccrual(r);
-            return new SuccessResult("همگام‌سازی بدهی برق انجام شد.");
+            if (contract == null)
+            {
+                return new ErrorDataResult<MeterReadingNewContextDto>(
+                    null,
+                    "Sözleşme bulunamadı.");
+            }
+
+            var lastReading = _meterReadingDal
+                .QueryNoTracking()
+                .Where(m => m.ContractId == contractId)
+                .OrderByDescending(m => m.Year)
+                .ThenByDescending(m => m.Month)
+                .FirstOrDefault();
+
+            MeterReadingNewContextDto dto;
+
+            if (lastReading == null)
+            {
+                // İlk okuma senaryosu → sözleşme başlangıcını miladiden Şemsî’ye çevir
+                var (startY, startM, _) = _timeProvider.ToPersian(contract.StartDate);
+
+                dto = new MeterReadingNewContextDto
+                {
+                    IsFirstReadingForContract = true,
+
+                    // Sözleşmenin başladığı Şemsî yıl/ay
+                    LastYear = startY,
+                    LastMonth = startM,
+
+                    // İlk okuma öncesi "son endeks" sözleşmedeki başlangıç endeksi
+                    LastCurrentIndex = contract.InitialElectricityIndex,
+
+                    // İlk okumada önceki tüketim/tutar yok
+                    LastUnitPrice = null,
+                    LastNetAmount = null,
+                    LastPreviouskWh = null
+                };
+            }
+            else
+            {
+                // Daha önce okuma yapılmış → son okuma bilgileri
+                dto = new MeterReadingNewContextDto
+                {
+                    IsFirstReadingForContract = false,
+
+                    LastYear = lastReading.Year,
+                    LastMonth = lastReading.Month,
+                    LastCurrentIndex = lastReading.CurrentIndex,
+
+                    LastUnitPrice = lastReading.UnitPrice,
+                    LastNetAmount = lastReading.NetAmount,
+                    LastPreviouskWh = lastReading.ConsumptionKwh
+                };
+            }
+
+            return new SuccessDataResult<MeterReadingNewContextDto>(dto);
         }
+
+        /// <summary>
+        /// Onaylanmış sayaç kaydı için:
+        /// - Market
+        /// - Owner
+        /// - (varsa) Franchise
+        /// - Elektrik
+        /// accrual'larını oluşturur.
+        /// </summary>
+        private IResult CreateAccrualsForMeterReading(MeterReading reading, int userId)
+        {
+            var contractResult = _contractService.GetById(reading.ContractId);
+            if (!contractResult.Success || contractResult.Data == null)
+                return new ErrorResult("Sözleşme bulunamadı.");
+
+            var contract = contractResult.Data;
+            var tenantId = contract.TenantId;
+
+            var consumption = Math.Max(0m, reading.CurrentIndex - reading.PreviousIndex);
+            var electricityAmount = Math.Round(consumption * reading.UnitPrice, 2, MidpointRounding.AwayFromZero);
+
+            var accruals = new List<AccrualCreateDto>
+    {
+        new AccrualCreateDto
+        {
+            ShopId = reading.ShopId,
+            TenantId = tenantId,
+            ContractId = reading.ContractId,
+            MeterReadingId = null,
+            Kind = AccrualKind.Market,
+            Year = reading.Year,
+            Month = reading.Month,
+            Amount = contract.MarketPortionAmount,
+            Notes = $"دوره تائیدی {reading.Year}/{reading.Month} - سهم مارکیت"
+        },
+        new AccrualCreateDto
+        {
+            ShopId = reading.ShopId,
+            TenantId = tenantId,
+            ContractId = reading.ContractId,
+            MeterReadingId = null,
+            Kind = AccrualKind.Owner,
+            Year = reading.Year,
+            Month = reading.Month,
+            Amount = contract.OwnerPortionAmount,
+            Notes = $"دوره تائیدی {reading.Year}/{reading.Month} - صاحب مارکیت"
+        },
+        new AccrualCreateDto
+        {
+            ShopId = reading.ShopId,
+            TenantId = tenantId,
+            ContractId = reading.ContractId,
+            MeterReadingId = reading.Id,
+            Kind = AccrualKind.Electricity,
+            Year = reading.Year,
+            Month = reading.Month,
+            Amount = electricityAmount,
+            Notes = $"دوره تائیدی {reading.Year}/{reading.Month} - صرفیه برق"
+        }
+    };
+
+            if (contract.FranchisePortionAmount > 0)
+            {
+                accruals.Add(new AccrualCreateDto
+                {
+                    ShopId = reading.ShopId,
+                    TenantId = tenantId,
+                    ContractId = reading.ContractId,
+                    MeterReadingId = null,
+                    Kind = AccrualKind.Franchise,
+                    Year = reading.Year,
+                    Month = reading.Month,
+                    Amount = contract.FranchisePortionAmount,
+                    Notes = $"Kabul dönemi {reading.Year}/{reading.Month} - Franchise"
+                });
+            }
+
+            foreach (var acc in accruals)
+            {
+                var result = _accrualService.Add(acc, userId);
+                if (!result.Success)
+                    return result;
+            }
+
+            return new SuccessResult("Dönem borçları oluşturuldu.");
+        }
+
     }
 }

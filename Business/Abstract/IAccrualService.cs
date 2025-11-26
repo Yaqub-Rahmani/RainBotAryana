@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.Accrual;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,21 +14,17 @@ namespace Business.Abstract
 {
     public interface IAccrualService
     {
-        // Basit
-        IDataResult<List<Accrual>> GetAll();
+        IDataResult<List<Accrual>> GetAll(Guid? shopId = null, Guid? tenantId = null, int? year = null, int? month = null, AccrualStatus? status = null);
         IDataResult<Accrual> GetById(Guid id);
+        IDataResult<AccrualDetailDto> GetDetail(Guid id);
 
-        // Zengin
-        IDataResult<PagedResult<AccrualDetailDto>> GetDetails(QueryOptions opt);
-        IDataResult<AccrualDetailDto> GetDetailById(Guid id);
-
-        // Yazmalar
-        IResult Add(Accrual accrual);
-        IResult Update(Accrual accrual);
+        IResult Add(AccrualCreateDto dto, int userId);
+        IResult Update(AccrualUpdateDto dto, int userId);
         IResult Delete(Guid id);
 
         // İşlemler
-        IResult InitializeOutstanding(Guid id); // Amount => Outstanding
-        IResult ApplySettlement(Guid id, decimal amount); // borç düşür
+        IResult Settle(AccrualSettleDto dto, int userId); // kısmi/nihai
+        IResult Reopen(Guid id, int userId);              // Settled -> Open (iş kuralına göre)
+        IResult RecalculateOutstanding(Guid id);          // Amount / settlements bazlı yeniden hesap
     }
 }

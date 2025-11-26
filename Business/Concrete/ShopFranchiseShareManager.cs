@@ -40,12 +40,33 @@ namespace Business.Concrete
             return !(b2 < from1 || from2 > a2);
         }
 
+        //private bool HasOverlapForOwner(ShopFranchiseShare e, Guid? excludeId = null)
+        //{
+
+        //    var q = _dal.QueryNoTracking().Where(x => x.ShopId == e.ShopId && x.FranchiseOwnerId == e.FranchiseOwnerId);
+        //    if (excludeId.HasValue) q = q.Where(x => x.Id != excludeId.Value);
+        //    return q.Any(x => Overlaps(e.EffectiveFrom, e.EffectiveTo, x.EffectiveFrom, x.EffectiveTo));
+        //}
+
         private bool HasOverlapForOwner(ShopFranchiseShare e, Guid? excludeId = null)
         {
-            var q = _dal.QueryNoTracking().Where(x => x.ShopId == e.ShopId && x.FranchiseOwnerId == e.FranchiseOwnerId);
-            if (excludeId.HasValue) q = q.Where(x => x.Id != excludeId.Value);
-            return q.Any(x => Overlaps(e.EffectiveFrom, e.EffectiveTo, x.EffectiveFrom, x.EffectiveTo));
+            var from = e.EffectiveFrom;
+            var to = e.EffectiveTo ?? DateOnly.MaxValue;
+
+            var q = _dal.QueryNoTracking()
+                .Where(x => x.ShopId == e.ShopId && x.FranchiseOwnerId == e.FranchiseOwnerId);
+
+            if (excludeId.HasValue)
+                q = q.Where(x => x.Id != excludeId.Value);
+
+            // ⛔ Overlaps(...) YOK
+            // ✅ Tamamen translatable koşul:
+            return q.Any(x =>
+                x.EffectiveFrom <= to &&
+                from <= (x.EffectiveTo ?? DateOnly.MaxValue)
+            );
         }
+
 
         private decimal TotalPercentOn(Guid shopId, DateOnly on, Guid? excludeId = null)
         {

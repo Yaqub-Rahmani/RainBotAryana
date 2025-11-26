@@ -14,15 +14,22 @@ namespace Entities.Concrete
     {
         [Key] public Guid Id { get; set; }
 
-        // % alanları (ör. 20.00, 2.50, 1.50, 16.00, 60.00)
-        [Column(TypeName = "decimal(5,2)")] public decimal RateTax { get; set; }
-        [Column(TypeName = "decimal(5,2)")] public decimal RateZakat { get; set; }
-        [Column(TypeName = "decimal(5,2)")] public decimal RateCharity { get; set; }
-        [Column(TypeName = "decimal(5,2)")] public decimal RateOwnerReserve { get; set; }
-        [Column(TypeName = "decimal(5,2)")] public decimal RateFamilyPool { get; set; }
+        [Column(TypeName = "decimal(5,2)")] public decimal RateTax { get; set; } = 20.00m;
 
-        [Required] public DateOnly EffectiveFrom { get; set; }
-        public DateOnly? EffectiveTo { get; set; }
+        [Column(TypeName = "decimal(5,2)")] public decimal RateZakat { get; set; } = 2.50m;
+
+        [Column(TypeName = "decimal(5,2)")] public decimal RateCharity { get; set; } = 1.50m;
+
+        [Column(TypeName = "decimal(5,2)")] public decimal RateOwnerReserve { get; set; } = 16.00m;
+
+        [Column(TypeName = "decimal(5,2)")] public decimal RateFamilyPool { get; set; } = 60.00m;
+
+        [Required]
+        public DateOnly CreatedAtUtc { get; set; }
+
+        public int CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
 
         [MaxLength(300)] public string? Notes { get; set; }
 

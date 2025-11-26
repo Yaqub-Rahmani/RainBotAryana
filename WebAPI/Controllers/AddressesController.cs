@@ -38,7 +38,7 @@ namespace WebAPI.Controllers
         [AllowAnonymous]
         public IActionResult GetByOwner(int ownerType, Guid ownerId)
         {
-            var r = _service.GetByOwner((AddressOwnerType)ownerType, ownerId);
+            var r = _service.GetByOwner((MediaOwnerType)ownerType, ownerId);
             return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
 

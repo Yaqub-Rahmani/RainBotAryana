@@ -1,8 +1,10 @@
 ﻿using Business.Abstract;
 using Core.Utilities.Query;
 using Entities.Concrete;
+using Entities.Dtos.CollectionAllocation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace WebAPI.Controllers
 {
@@ -11,55 +13,48 @@ namespace WebAPI.Controllers
     public class CollectionAllocationsController : ControllerBase
     {
         private readonly ICollectionAllocationService _service;
-        public CollectionAllocationsController(ICollectionAllocationService service) { _service = service; }
 
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult GetAll() => Ok(_service.GetAll().Data);
+        public CollectionAllocationsController(ICollectionAllocationService service)
+        {
+            _service = service;
+        }
 
-        [HttpGet("{id:guid}")]
-        [AllowAnonymous]
+        [HttpGet, AllowAnonymous]
+        public IActionResult GetAll([FromQuery] Guid? collectionId, [FromQuery] Guid? contractId)
+            => Ok(_service.GetAll(collectionId, contractId).Data);
+
+        [HttpGet("{id:guid}"), AllowAnonymous]
         public IActionResult Get(Guid id)
         {
             var r = _service.GetById(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("details")]
-        [AllowAnonymous]
-        public IActionResult GetDetails([FromQuery] QueryOptions opt)
+        [HttpGet("{id:guid}/detail"), AllowAnonymous]
+        public IActionResult Detail(Guid id)
         {
-            var r = _service.GetDetails(opt);
-            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
-        }
-
-        [HttpGet("{id:guid}/detail")]
-        [AllowAnonymous]
-        public IActionResult GetDetail(Guid id)
-        {
-            var r = _service.GetDetailById(id);
+            var r = _service.GetDetail(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpPost]
-        [Authorize]
-        public IActionResult Add([FromBody] CollectionAllocation dto)
+        [HttpPost, Authorize]
+        public IActionResult Add([FromBody] CollectionAllocationCreateDto dto)
         {
-            var r = _service.Add(dto);
-            return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var r = _service.Add(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpPut("{id:guid}")]
-        [Authorize]
-        public IActionResult Update(Guid id, [FromBody] CollectionAllocation dto)
+        [HttpPut("{id:guid}"), Authorize]
+        public IActionResult Update(Guid id, [FromBody] CollectionAllocationUpdateDto dto)
         {
-            if (id != dto.Id) return BadRequest("Id mismatch.");
-            var r = _service.Update(dto);
-            return r.Success ? Ok() : BadRequest(r.Message);
+            if (dto.Id != id) return BadRequest("شناسه نامعتبر است.");
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var r = _service.Update(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpDelete("{id:guid}")]
-        [Authorize]
+        [HttpDelete("{id:guid}"), Authorize]
         public IActionResult Delete(Guid id)
         {
             var r = _service.Delete(id);

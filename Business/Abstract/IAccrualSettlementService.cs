@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.AccrualSettlement;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,14 +15,12 @@ namespace Business.Abstract
     public interface IAccrualSettlementService
     {
         // Okuma
-        IDataResult<List<AccrualSettlement>> GetAll();
+        IDataResult<List<AccrualSettlement>> GetAll(Guid? accrualId = null);
         IDataResult<AccrualSettlement> GetById(Guid id);
-        IDataResult<PagedResult<AccrualSettlementDetailDto>> GetDetails(QueryOptions opt);
-        IDataResult<AccrualSettlementDetailDto> GetDetailById(Guid id);
+        IDataResult<AccrualSettlementDetailDto> GetDetail(Guid id);
 
-        // Yazma
-        IResult Add(AccrualSettlement settlement);     // accrual bakiyesini düşürür
-        IResult Delete(Guid id);                       // accrual bakiyesini geri arttırır (undo)
-        IResult UpdateNote(Guid id, string? notes);    // sadece not güncelle
+        IResult Add(AccrualSettlementCreateDto dto, int userId);
+        IResult Update(AccrualSettlementUpdateDto dto, int userId);
+        IResult Delete(Guid id, int userId);
     }
 }

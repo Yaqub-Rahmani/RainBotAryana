@@ -17,20 +17,39 @@ using System.Text;
 using System.Threading.Tasks;
 using Core.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Entities.Dtos.FranchiseOwner;
 
 namespace Business.Concrete
 {
     public class FranchiseOwnerManager : IFranchiseOwnerService
     {
         private readonly IFranchiseOwnerDal _ownerDal;
-        private readonly IShopFranchiseShareDal _shareDal;           // varsayım: mevcut
-        private readonly IFranchiseBalanceEntryDal _balanceDal;      // mevcut (önceki tabloda kurduk)
+        private readonly IShopFranchiseShareDal _shareDal;              // Pay/ortaklıklar
+        private readonly IFranchiseBalanceEntryDal _balanceEntryDal;    // Hareketler (IN/OUT ledger)
 
-        public FranchiseOwnerManager(IFranchiseOwnerDal ownerDal, IShopFranchiseShareDal shareDal, IFranchiseBalanceEntryDal balanceDal)
+        private readonly IMediaAssetDal _mediaDal;                      // Avatar
+        private readonly IPhoneDal _phoneDal;                           // Primary phone
+        private readonly IAddressDal _addrDal;                          // Primary address (Province/District dahil)
+        private readonly IFranchiseOwnerBalanceDal _ownerBalanceDal;    // Özet bakiye (Balance)
+
+        public FranchiseOwnerManager(
+            IFranchiseOwnerDal ownerDal,
+            IShopFranchiseShareDal shareDal,
+            IFranchiseBalanceEntryDal balanceEntryDal,
+            IMediaAssetDal mediaDal,
+            IPhoneDal phoneDal,
+            IAddressDal addrDal,
+            IFranchiseOwnerBalanceDal ownerBalanceDal
+        )
         {
             _ownerDal = ownerDal;
             _shareDal = shareDal;
-            _balanceDal = balanceDal;
+            _balanceEntryDal = balanceEntryDal;
+
+            _mediaDal = mediaDal;
+            _phoneDal = phoneDal;
+            _addrDal = addrDal;
+            _ownerBalanceDal = ownerBalanceDal;
         }
 
         // -------- Okumalar --------
@@ -69,7 +88,6 @@ namespace Business.Concrete
                 var like = $"%{key}%";
                 owners = owners.Where(x =>
                     EF.Functions.Like(x.DisplayName, like) ||
-                    (x.Phone != null && EF.Functions.Like(x.Phone, like)) ||
                     (x.Email != null && EF.Functions.Like(x.Email, like)) ||
                     (x.Notes != null && EF.Functions.Like(x.Notes, like))
                 );
@@ -89,7 +107,6 @@ namespace Business.Concrete
                 .Select(o => new {
                     o.Id,
                     o.DisplayName,
-                    o.Phone,
                     o.Email,
                     o.Notes,
                     o.IsActive
@@ -127,7 +144,7 @@ namespace Business.Concrete
             var shareMapActive = shareAgg.ToDictionary(x => x.OwnerId, x => x.ActiveToday);
 
             // 5) Bakiye özetlerini (In/Out) tek seferde getir
-            var balAgg = _balanceDal.QueryNoTracking()
+            var balAgg = _balanceEntryDal.QueryNoTracking()
                 .Where(b => ownerIds.Contains(b.FranchiseOwnerId))
                 .GroupBy(b => b.FranchiseOwnerId)
                 .Select(g => new {
@@ -150,7 +167,6 @@ namespace Business.Concrete
                 {
                     Id = o.Id,
                     DisplayName = o.DisplayName,
-                    Phone = o.Phone,
                     Email = o.Email,
                     Notes = o.Notes,
                     IsActive = o.IsActive,
@@ -180,7 +196,6 @@ namespace Business.Concrete
                 {
                     o.Id,
                     o.DisplayName,
-                    o.Phone,
                     o.Email,
                     o.Notes,
                     o.IsActive
@@ -200,7 +215,7 @@ namespace Business.Concrete
                 s.EffectiveFrom <= today && (!s.EffectiveTo.HasValue || s.EffectiveTo.Value >= today));
 
             // 4) Bakiye (FranchiseBalanceEntry) özetleri – tek group ile
-            var bal = _balanceDal.QueryNoTracking()
+            var bal = _balanceEntryDal.QueryNoTracking()
                 .Where(b => b.FranchiseOwnerId == id)
                 .GroupBy(_ => 1)
                 .Select(g => new
@@ -214,7 +229,6 @@ namespace Business.Concrete
             {
                 Id = owner.Id,
                 DisplayName = owner.DisplayName,
-                Phone = owner.Phone,
                 Email = owner.Email,
                 Notes = owner.Notes,
                 IsActive = owner.IsActive,
@@ -229,18 +243,42 @@ namespace Business.Concrete
 
         // -------- Yazmalar --------
 
+        //[SecuredOperation("franchiseowner.write,admin")]
+        //[ValidationAspect(typeof(FranchiseOwnerValidator))]
+        //[TransactionScopeAspect]
+        //[CacheRemoveAspect("IFranchiseOwnerService.Get")]
+        //public IResult Add(FranchiseOwner owner)
+        //{
+        //    var dup = _ownerDal.Get(x => x.DisplayName.ToLower() == owner.DisplayName.ToLower());
+        //    if (dup != null) return new ErrorResult("مالک/امتیاز با همین نام وجود دارد.");
+
+        //    _ownerDal.Add(owner);
+        //    return new SuccessResult("صاحب امتیاز افزوده شد.");
+        //}
+
         [SecuredOperation("franchiseowner.write,admin")]
         [ValidationAspect(typeof(FranchiseOwnerValidator))]
         [TransactionScopeAspect]
         [CacheRemoveAspect("IFranchiseOwnerService.Get")]
         public IResult Add(FranchiseOwner owner)
         {
-            var dup = _ownerDal.Get(x => x.DisplayName.ToLower() == owner.DisplayName.ToLower());
-            if (dup != null) return new ErrorResult("مالک/امتیاز با همین نام وجود دارد.");
+            // Basit normalizasyon
+            owner.DisplayName = owner.DisplayName?.Trim();
+            owner.NationalId = owner.NationalId?.Trim();
+
+            // Aynı isim + aynı kimlik numarası var mı?
+            var duplicate = _ownerDal.Get(x =>
+                x.DisplayName.ToLower() == owner.DisplayName.ToLower() &&
+                x.NationalId.ToLower() == owner.NationalId.ToLower()
+            );
+
+            if (duplicate != null)
+                return new ErrorResult("مالک/امتیاز با همین نام و شمارهٔ تذکره قبلاً ثبت شده است.");
 
             _ownerDal.Add(owner);
             return new SuccessResult("صاحب امتیاز افزوده شد.");
         }
+
 
         [SecuredOperation("franchiseowner.write,admin")]
         [ValidationAspect(typeof(FranchiseOwnerValidator))]
@@ -255,7 +293,6 @@ namespace Business.Concrete
             if (dup != null) return new ErrorResult("مالک/امتیاز با همین نام وجود دارد.");
 
             current.DisplayName = owner.DisplayName;
-            current.Phone = owner.Phone;
             current.Email = owner.Email;
             current.Notes = owner.Notes;
             current.IsActive = owner.IsActive;
@@ -299,5 +336,358 @@ namespace Business.Concrete
             _ownerDal.Update(e);
             return new SuccessResult("غیرفعال شد.");
         }
+
+        // ------------------------------------------------------------
+        // Owner View: Tümü (filtre: active?) — N+1 yok, toplu çekim.
+        // ------------------------------------------------------------
+        [CacheAspect(10)]
+        public IDataResult<List<FranchiseOwnerViewDto>> GetAllOwnerView(bool? active = null)
+        {
+            // 1) Owner çek
+            var ownersQ = _ownerDal.QueryNoTracking();
+            if (active.HasValue) ownersQ = ownersQ.Where(o => o.IsActive == active.Value);
+
+            var owners = ownersQ
+                .Select(o => new { o.Id, o.DisplayName, o.IsActive })
+                .OrderByDescending(o => o.IsActive).ThenBy(o => o.DisplayName)
+                .ToList();
+
+            var ownerIds = owners.Select(x => x.Id).ToList();
+            if (ownerIds.Count == 0)
+                return new SuccessDataResult<List<FranchiseOwnerViewDto>>(new());
+
+            // 2) Avatar (primary) — MediaAsset
+            var avatars = _mediaDal.QueryNoTracking()
+                .Where(m => ownerIds.Contains(m.OwnerId)
+                            && m.OwnerType == MediaOwnerType.FranchiseOwner
+                            && m.Kind == MediaKind.Avatar
+                            && m.IsPrimary)
+                .Select(m => new { m.OwnerId, m.StorageUrl })
+                .ToList()
+                .GroupBy(x => x.OwnerId)
+                .ToDictionary(g => g.Key, g => g.First().StorageUrl);
+
+            // 3) Primary Phone
+            var phones = _phoneDal.QueryNoTracking()
+                .Where(p => ownerIds.Contains(p.OwnerId)
+                            && p.OwnerType == MediaOwnerType.FranchiseOwner
+                            && p.IsPrimary)
+                .Select(p => new { p.OwnerId, p.Number })
+                .ToList()
+                .GroupBy(x => x.OwnerId)
+                .ToDictionary(g => g.Key, g => g.First().Number);
+
+            // 4) Primary Address (+ Province, District)
+            // Not: Province/District navigation'ı Address üzerinde tanımlı.
+            var addresses = _addrDal.QueryNoTracking()
+                .Where(a => ownerIds.Contains(a.OwnerId)
+                            && a.OwnerType == MediaOwnerType.FranchiseOwner
+                            && a.IsPrimary)
+                .Include(a => a.Province)
+                .Include(a => a.District)
+                .Select(a => new
+                {
+                    a.OwnerId,
+                    ProvinceName = a.Province != null ? a.Province.Name : null,
+                    DistrictName = a.District != null ? a.District.Name : null,
+                    a.Line1
+                })
+                .ToList()
+                .GroupBy(x => x.OwnerId)
+                .ToDictionary(g => g.Key, g => FormatAddress(g.First().ProvinceName, g.First().DistrictName, g.First().Line1));
+
+            // 5) Balance
+            var balances = _ownerBalanceDal.QueryNoTracking()
+                .Where(b => ownerIds.Contains(b.FranchiseOwnerId))
+                .Select(b => new { b.FranchiseOwnerId, b.Balance })
+                .ToList()
+                .GroupBy(x => x.FranchiseOwnerId)
+                .ToDictionary(g => g.Key, g => g.First().Balance);
+
+            // 6) Birleştir
+            var result = owners.Select(o => new FranchiseOwnerViewDto
+            {
+                Id = o.Id,
+                DisplayName = o.DisplayName,
+                IsActive = o.IsActive,
+                Avatar = avatars.TryGetValue(o.Id, out var url) ? url : null,
+                PrimaryPhone = phones.TryGetValue(o.Id, out var ph) ? ph : null,
+                AddressFull = addresses.TryGetValue(o.Id, out var addr) ? addr : null,
+                Balance = balances.TryGetValue(o.Id, out var bal) ? bal : 0m
+            }).ToList();
+
+            return new SuccessDataResult<List<FranchiseOwnerViewDto>>(result);
+        }
+
+        // ------------------------------------------------------------
+        // Owner View: Paged + Search + Sort (QueryOptions)
+        // ------------------------------------------------------------
+        [CacheAspect(10)]
+        public IDataResult<PagedResult<FranchiseOwnerViewDto>> GetOwnerViews(QueryOptions opt, bool? active = null)
+        {
+            opt ??= new QueryOptions();
+
+            // 1) Owner base sorgu + filtreler
+            var owners = _ownerDal.QueryNoTracking();
+            if (active.HasValue) owners = owners.Where(o => o.IsActive == active.Value);
+
+            owners = owners.ApplyFilters(opt.Filters);
+
+            if (!string.IsNullOrWhiteSpace(opt.Search))
+            {
+                var key = opt.Search.Trim();
+                var like = $"%{key}%";
+                owners = owners.Where(o =>
+                    EF.Functions.Like(o.DisplayName, like) ||
+                    (o.Email != null && EF.Functions.Like(o.Email, like)) ||
+                    (o.Notes != null && EF.Functions.Like(o.Notes, like))
+                );
+            }
+
+            owners = owners.ApplySort(opt.Sort);
+            if (!owners.Expression.ToString()!.Contains("OrderBy"))
+                owners = owners.OrderByDescending(o => o.IsActive).ThenBy(o => o.DisplayName);
+
+            // 2) Count
+            var total = owners.Count();
+
+            // 3) Page slice (yalın alanlar)
+            var page = owners
+                .Skip((opt.Page - 1) * opt.PageSize)
+                .Take(opt.PageSize)
+                .Select(o => new { o.Id, o.DisplayName, o.IsActive })
+                .ToList();
+
+            var ids = page.Select(x => x.Id).ToList();
+            if (ids.Count == 0)
+                return new SuccessDataResult<PagedResult<FranchiseOwnerViewDto>>(new PagedResult<FranchiseOwnerViewDto>
+                {
+                    Items = new List<FranchiseOwnerViewDto>(),
+                    Page = opt.Page,
+                    PageSize = opt.PageSize,
+                    TotalCount = total
+                });
+
+            // 4) Avatars
+            var avatars = _mediaDal.QueryNoTracking()
+                .Where(m => ids.Contains(m.OwnerId)
+                            && m.OwnerType == MediaOwnerType.FranchiseOwner
+                            && m.Kind == MediaKind.Avatar
+                            && m.IsPrimary)
+                .Select(m => new { m.OwnerId, m.StorageUrl })
+                .ToList()
+                .GroupBy(x => x.OwnerId)
+                .ToDictionary(g => g.Key, g => g.First().StorageUrl);
+
+            // 5) Phones
+            var phones = _phoneDal.QueryNoTracking()
+                .Where(p => ids.Contains(p.OwnerId)
+                            && p.OwnerType == MediaOwnerType.FranchiseOwner
+                            && p.IsPrimary)
+                .Select(p => new { p.OwnerId, p.Number })
+                .ToList()
+                .GroupBy(x => x.OwnerId)
+                .ToDictionary(g => g.Key, g => g.First().Number);
+
+            // 6) Addresses
+            var addresses = _addrDal.QueryNoTracking()
+                .Where(a => ids.Contains(a.OwnerId)
+                            && a.OwnerType == MediaOwnerType.FranchiseOwner
+                            && a.IsPrimary)
+                .Include(a => a.Province)
+                .Include(a => a.District)
+                .Select(a => new
+                {
+                    a.OwnerId,
+                    ProvinceName = a.Province != null ? a.Province.Name : null,
+                    DistrictName = a.District != null ? a.District.Name : null,
+                    a.Line1
+                })
+                .ToList()
+                .GroupBy(x => x.OwnerId)
+                .ToDictionary(g => g.Key, g => FormatAddress(g.First().ProvinceName, g.First().DistrictName, g.First().Line1));
+
+            // 7) Balances
+            var balances = _ownerBalanceDal.QueryNoTracking()
+                .Where(b => ids.Contains(b.FranchiseOwnerId))
+                .Select(b => new { b.FranchiseOwnerId, b.Balance })
+                .ToList()
+                .GroupBy(x => x.FranchiseOwnerId)
+                .ToDictionary(g => g.Key, g => g.First().Balance);
+
+            // 8) Merge
+            var items = page.Select(o => new FranchiseOwnerViewDto
+            {
+                Id = o.Id,
+                DisplayName = o.DisplayName,
+                IsActive = o.IsActive,
+                Avatar = avatars.TryGetValue(o.Id, out var url) ? url : null,
+                PrimaryPhone = phones.TryGetValue(o.Id, out var ph) ? ph : null,
+                AddressFull = addresses.TryGetValue(o.Id, out var addr) ? addr : null,
+                Balance = balances.TryGetValue(o.Id, out var bal) ? bal : 0m
+            }).ToList();
+
+            return new SuccessDataResult<PagedResult<FranchiseOwnerViewDto>>(new PagedResult<FranchiseOwnerViewDto>
+            {
+                Items = items,
+                Page = opt.Page,
+                PageSize = opt.PageSize,
+                TotalCount = total
+            });
+        }
+
+        // ------------------------------------------------------------
+        // Yardımcı
+        // ------------------------------------------------------------
+        private static string? FormatAddress(string? province, string? district, string? line1)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(province)) parts.Add(province);
+            if (!string.IsNullOrWhiteSpace(district)) parts.Add(district);
+           // if (!string.IsNullOrWhiteSpace(line1)) parts.Add(line1);
+            return parts.Count == 0 ? null : string.Join(" - ", parts);
+        }
+
+
+        // FranchiseOwnerManager içine EKLE/DEĞİŞTİR
+        [CacheAspect(10)]
+        public IDataResult<OwnerProfileDto> GetProfile(Guid ownerId)
+        {
+            var ownerType = MediaOwnerType.FranchiseOwner;
+
+            var kAvatar = MediaKind.Avatar;
+            var kIdFront = MediaKind.IdFront;
+            var kIdBack = MediaKind.IdBack;
+            var kFinger = MediaKind.FingerBitmap;
+            var kContract = MediaKind.FranchiseContract;
+
+            var q =
+                from o in _ownerDal.QueryNoTracking()
+                where o.Id == ownerId
+
+                // Phones
+                let phonePrimary =
+                    (from p in _phoneDal.QueryNoTracking()
+                     where p.OwnerType == ownerType && p.OwnerId == o.Id
+                     orderby p.IsPrimary descending, p.Id ascending
+                     select p.Number).FirstOrDefault()
+
+                let phoneSecondary =
+                    (from p in _phoneDal.QueryNoTracking()
+                     where p.OwnerType == ownerType && p.OwnerId == o.Id
+                     orderby p.IsPrimary descending, p.Id ascending
+                     select p.Number).Skip(1).FirstOrDefault()
+
+                // Address (primary öncelikli)
+                let addr =
+                    (from a in _addrDal.QueryNoTracking()
+                     where a.OwnerType == ownerType && a.OwnerId == o.Id
+                     orderby a.IsPrimary descending
+                     select new
+                     {
+                         Province = a.Province != null ? a.Province.Name : null,
+                         District = a.District != null ? a.District.Name : null,
+                         a.Line1
+                     }).FirstOrDefault()
+
+                // Media (primary öncelikli)
+                let avatarUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == o.Id && m.Kind == kAvatar
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+                let idFrontUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == o.Id && m.Kind == kIdFront
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+                let idBackUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == o.Id && m.Kind == kIdBack
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+                let fingerUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == o.Id && m.Kind == kFinger
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+                let contractUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == o.Id && m.Kind == kContract
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+
+                // Balance (özet tablo: tek satır varsayımı)
+                let bal =
+                    (from b in _ownerBalanceDal.QueryNoTracking()
+                     where b.FranchiseOwnerId == o.Id
+                     select new { b.Balance /*, b.CurrencyCode*/ }).FirstOrDefault()
+
+                select new OwnerProfileDto
+                {
+                    Id = o.Id.ToString(),
+                    DisplayName = o.DisplayName,
+                    FatherName = o.FatherName,
+                    Gender = o.Gender,
+                    NationalId = o.NationalId,
+
+                    PhonePrimary = phonePrimary,
+                    PhoneSecondary = phoneSecondary,
+
+                    Province = addr != null ? addr.Province : null,
+                    District = addr != null ? addr.District : null,
+                    AddressLine = addr != null ? addr.Line1 : null,
+
+                    AddressFull =
+                        (addr == null)
+                            ? null
+                            : (
+                                (addr.Province ?? "") +
+                                ((addr.Province != null && addr.District != null) ? ", " : "") +
+                                (addr.District ?? "") +
+                                (((addr.Province != null || addr.District != null) && addr.Line1 != null) ? " - " : "") +
+                                (addr.Line1 ?? "")
+                              ),
+
+                    // Ayrı description yoksa Notes
+                    Description = o.Notes,
+
+                    Balance = bal != null ? bal.Balance : 0m,
+
+                    AvatarUrl = avatarUrl,
+                    IdFrontUrl = idFrontUrl,
+                    IdBackUrl = idBackUrl,
+                    FingerBitmapUrl = fingerUrl,
+                    ContractUrl = contractUrl
+                };
+
+            var dto = q.FirstOrDefault();
+            if (dto == null)
+                return new ErrorDataResult<OwnerProfileDto>(null, "یافت نشد.");
+
+            // ---- B seçeneği: Null stringleri boş stringe sabitle ----
+            dto.DisplayName ??= string.Empty;
+            dto.FatherName ??= string.Empty;
+            dto.NationalId ??= string.Empty;
+
+            dto.PhonePrimary ??= string.Empty;
+            dto.PhoneSecondary ??= string.Empty;
+
+            dto.Province ??= string.Empty;
+            dto.District ??= string.Empty;
+            dto.AddressLine ??= string.Empty;
+            dto.AddressFull ??= string.Empty;
+
+            dto.Description ??= string.Empty;
+
+            dto.AvatarUrl ??= string.Empty;
+            dto.IdFrontUrl ??= string.Empty;
+            dto.IdBackUrl ??= string.Empty;
+            dto.FingerBitmapUrl ??= string.Empty;
+            dto.ContractUrl ??= string.Empty;
+
+            return new SuccessDataResult<OwnerProfileDto>(dto);
+        }
+
     }
 }

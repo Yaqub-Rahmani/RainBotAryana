@@ -21,11 +21,6 @@ namespace Business.ValidationRules.FluentValidation
             RuleFor(x => x.MaleWeight)
                 .GreaterThan(0).WithMessage("وزن پسر باید بزرگتر از صفر باشد.");
 
-            RuleFor(x => x.EffectiveFrom)
-                .NotNull().WithMessage("تاریخ شروع لازم است.");
-
-            RuleFor(x => x).Must(x => !x.EffectiveTo.HasValue || x.EffectiveFrom <= x.EffectiveTo.Value)
-                .WithMessage("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
 
             RuleFor(x => x.Notes).MaximumLength(300).WithMessage("یادداشت حداکثر ۳۰۰ کاراکتر.");
         }

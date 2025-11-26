@@ -17,7 +17,7 @@ namespace DataAccess.Concrete.EntityFramework
         public IQueryable<Address> Query() => _context.Set<Address>().AsQueryable();
         public IQueryable<Address> QueryNoTracking() => _context.Set<Address>().AsNoTracking();
 
-        public IList<Address> GetByOwner(AddressOwnerType ownerType, Guid ownerId)
+        public IList<Address> GetByOwner(MediaOwnerType ownerType, Guid ownerId)
             => _context.Set<Address>().Where(a => a.OwnerType == ownerType && a.OwnerId == ownerId).ToList();
     }
 }

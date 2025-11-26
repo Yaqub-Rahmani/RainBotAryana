@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.MeterReadings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,19 +15,19 @@ namespace Business.Abstract
     public interface IMeterReadingService
     {
         // Okumalar
-        IDataResult<List<MeterReading>> GetAll(Guid? shopId = null, int? year = null, int? month = null, bool? finalized = null);
+        IDataResult<List<MeterReading>> GetAll(Guid? shopId = null, Guid? contractId = null, int? year = null, int? month = null, bool? finalized = null);
         IDataResult<MeterReading> GetById(Guid id);
-        IDataResult<PagedResult<MeterReadingDetailDto>> GetDetails(QueryOptions opt, Guid? shopId = null, int? year = null, int? month = null, bool? finalized = null);
-        IDataResult<MeterReadingDetailDto> GetDetailById(Guid id);
+        IDataResult<MeterReadingDetailDto> GetDetail(Guid id);
 
-        // Yazmalar
-        IResult Add(MeterReading reading);
-        IResult Update(MeterReading reading);
+        IDataResult<MeterReadingNewContextDto> GetNewContext(Guid contractId);
+
+
+        IResult Add(MeterReadingCreateDto dto, int userId);
+        IResult Update(MeterReadingUpdateDto dto, int userId);
         IResult Delete(Guid id);
 
-        // İşlemsel
-        IResult Finalize(Guid id);     // Accrual oluştur/güncelle
-        IResult Unfinalize(Guid id);   // Mümkünse Accrual’ı geri al
-        IResult SyncAccrual(Guid id);  // elle senkron
+
+        IResult Finalize(Guid id, int userId);
+        IResult Unfinalize(Guid id, int userId);
     }
 }

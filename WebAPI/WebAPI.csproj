@@ -20,4 +20,48 @@
 		<ProjectReference Include="..\Entities\Entities.csproj" />
 		<ProjectReference Include="..\DataAccess\DataAccess.csproj" />
 	</ItemGroup>
+
+	<!-- Native DLL'leri çıktı klasörüne kopyala 
+	<ItemGroup>
+		DLL'leri WebAPI projesinde 'native\' klasörü altına koy
+		<None Include="native\libzkfp.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="native\libzkfpcsharp.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="native\" />
+	</ItemGroup>-->
+
+
+	<ItemGroup>
+		<None Update="..\libs\zk\libzkfpcsharp.dll">
+			<Link>native\libzkfpcsharp.dll</Link>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="..\libs\zk\zkfinger10.dll">
+			<Link>native\zkfinger10.dll</Link>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="..\libs\zk\ZKFPCap.dll">
+			<Link>native\ZKFPCap.dll</Link>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="..\libs\zk\zkfpslibLow.dll">
+			<Link>native\zkfpslibLow.dll</Link>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="..\libs\zk\ztrace_maps.dll">
+			<Link>native\ztrace_maps.dll</Link>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+	<PropertyGroup>
+		<PlatformTarget>x86</PlatformTarget>
+	</PropertyGroup>
+
+
+
 </Project>

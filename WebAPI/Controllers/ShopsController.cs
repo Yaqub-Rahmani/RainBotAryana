@@ -1,6 +1,7 @@
 ﻿using Business.Abstract;
 using Core.Utilities.Query;
 using Entities.Concrete;
+using Entities.Dtos.shop;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -65,6 +66,46 @@ namespace WebAPI.Controllers
         {
             var r = _service.Delete(id);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+        }
+
+        [HttpGet("with-shares")]
+       // [Authorize]
+        public async Task<IActionResult> GetWithShares([FromQuery] Guid ownerId)
+        {
+            if (ownerId == Guid.Empty)
+                return BadRequest("ownerId is required.");
+
+            var result = await _service.GetShopsWithSharesAsync(ownerId);
+            if (!result.Success) return BadRequest(result.Message);
+
+            return Ok(result.Data);
+        }
+
+        [HttpGet("franchise-owners/{ownerId:guid}/shops")]
+        [Authorize] // Yetkilendirme gerekiyorsa aç
+        [ProducesResponseType(typeof(IEnumerable<FranchiseOwnerShopsDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetFranchiseOwnerShops(Guid ownerId)
+        {
+            if (ownerId == Guid.Empty)
+                return BadRequest("ownerId is required.");
+
+            var result = await _service.GetFranchiseOwnerShops(ownerId);
+
+            if (!result.Success)
+                return BadRequest(result.Message ?? "İşlem gerçekleştirilemedi.");
+
+            // Servis boş liste dönebilir; 200 OK + [] uygun
+            return Ok(result.Data ?? new List<FranchiseOwnerShopsDto>());
+        }
+
+        [HttpGet("available-for-contracts")]
+        [ProducesResponseType(typeof(List<ShopPickerDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetAvailableForContracts()
+        {
+            var r = await _service.GetAvailableShopsAsync();
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
     }
 }

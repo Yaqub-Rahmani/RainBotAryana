@@ -74,8 +74,8 @@ namespace Business.Concrete
                 TotalFamilyAmount = p.TotalFamilyAmount,
                 RuleSummary = p.RuleSummary,
                 OccurredAtUtc = p.OccurredAtUtc,
-                LineCount = p.Lines.Count,                              // EF nav (NoTracking ile de çalışır)
-                LinesTotal = p.Lines.Sum(l => (decimal?)l.Amount) ?? 0  // FamilyPayoutLine.Amount varsayımı
+                LineCount = p.FamilyPayoutLines.Count,                              // EF nav (NoTracking ile de çalışır)
+                LinesTotal = p.FamilyPayoutLines.Sum(l => (decimal?)l.Amount) ?? 0  // FamilyPayoutLine.Amount varsayımı
             });
 
             var total = projected.Count();
@@ -102,8 +102,8 @@ namespace Business.Concrete
                     TotalFamilyAmount = p.TotalFamilyAmount,
                     RuleSummary = p.RuleSummary,
                     OccurredAtUtc = p.OccurredAtUtc,
-                    LineCount = p.Lines.Count,
-                    LinesTotal = p.Lines.Sum(l => (decimal?)l.Amount) ?? 0
+                    LineCount = p.FamilyPayoutLines.Count,
+                    LinesTotal = p.FamilyPayoutLines.Sum(l => (decimal?)l.Amount) ?? 0
                 }).FirstOrDefault();
 
             return dto == null ? new ErrorDataResult<FamilyPayoutDetailDto>(null, "یافت نشد.")

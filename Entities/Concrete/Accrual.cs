@@ -7,6 +7,8 @@ using System.Runtime.ConstrainedExecution;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
@@ -15,22 +17,23 @@ namespace Entities.Concrete
     //Accrual → her ay oluşan borç kalemi(Owner/Franchise/Market sabitleri + Electricity sayaçtan),
     //AccrualSettlement → tahsilat dağıtımının hangi borcu kapattığını kayıtlar(kısmi/çoklu kapanış destekli).
     //Not: Hesaplama ve öncelik sırası(Elektrik → Market → Owner → Franchise) business katmanında kalacak; entity’ler yalnızca kayıt/izleme amacıyla yalın tutuldu.
+
     public enum AccrualKind
     {
-        Owner = 1,       // Market sahibi payı (sabit)
-        Franchise = 2,   // İmtiyaz payı (sabit)
-        Market = 3,      // Market payı (sabit)
-        Electricity = 4  // Elektrik (sayaçtan, %10 rezerv dahil faturalandırılan toplam)
+        Owner = 1,
+        Franchise = 2,
+        Market = 3,
+        Electricity = 4
     }
 
     public enum AccrualStatus
     {
-        Open = 1,            // Tamamı açık borç
-        PartiallySettled = 2,// Kısmi kapandı
-        Settled = 3          // Tam kapandı
+        Open = 1,
+        PartiallySettled = 2,
+        Settled = 3
     }
 
-    public class Accrual: IEntity
+    public class Accrual : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -43,7 +46,7 @@ namespace Entities.Concrete
         [Required]
         public Guid TenantId { get; set; }
 
-        /// <summary>Kaynağı olan sözleşme (sabit kalemler için zorunlu, elektrikte de bağ tutmak faydalı)</summary>
+        /// <summary>Kaynağı olan sözleşme</summary>
         [Required]
         public Guid ContractId { get; set; }
 
@@ -55,7 +58,7 @@ namespace Entities.Concrete
         public AccrualKind Kind { get; set; }
 
         /// <summary>Borç hangi döneme ait? (YYYY, 1–12)</summary>
-        [Range(2000, 2100)]
+        [Range(1300, 1500)]
         public int Year { get; set; }
 
         [Range(1, 12)]
@@ -63,15 +66,18 @@ namespace Entities.Concrete
 
         /// <summary>Oluşturulma (tahakkuk) tarihi</summary>
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+        public int CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
 
-        /// <summary>Durum (Open/PartiallySettled/Settled)</summary>
+        /// <summary>Durum</summary>
         public AccrualStatus Status { get; set; } = AccrualStatus.Open;
 
-        /// <summary>Toplam borç tutarı (sabit kalemlerde sözleşmeden, elektrikte sayaçtan; elektrik için %10 rezerv dahil faturalandırılan toplam)</summary>
+        /// <summary>Toplam borç tutarı</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 
-        /// <summary>Kalan borç (business tahsilat yaptıkça düşer)</summary>
+        /// <summary>Kalan borç</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal OutstandingAmount { get; set; }
 
@@ -79,11 +85,30 @@ namespace Entities.Concrete
         [MaxLength(500)]
         public string? Notes { get; set; }
 
-        // Nav
-        public Shop? Shop { get; set; }
-        public Tenant? Tenant { get; set; }
-        public Contract? Contract { get; set; }
+        // Navigation
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ShopId))]
+        public Shop Shop { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(TenantId))]
+        public Tenant Tenant { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(ContractId))]
+        public Contract Contract { get; set; } = null!;
+
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(MeterReadingId))]
         public MeterReading? MeterReading { get; set; }
+
+        [JsonIgnore]
+        [ValidateNever]
+        public ICollection<AccrualSettlement> AccrualSettlements { get; set; } = new List<AccrualSettlement>();
 
         /// <summary>Basit tutarlılık yardımcıları</summary>
         public void InitializeOutstanding() => OutstandingAmount = Amount;
@@ -95,4 +120,5 @@ namespace Entities.Concrete
             Status = OutstandingAmount == 0 ? AccrualStatus.Settled : AccrualStatus.PartiallySettled;
         }
     }
+
 }

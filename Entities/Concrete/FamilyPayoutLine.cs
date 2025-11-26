@@ -6,10 +6,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Entities;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //    FamilyPayout & FamilyPayoutLine(Aile havuzunun paylaştırılması)
+    //FamilyPayout & FamilyPayoutLine(Aile havuzunun paylaştırılması)
     //Aile havuzundaki tutarın, İslami pay kuralına göre üyelere dağıtıldığı olay(ve satırları).
     //Business pay hesabını yapar; burada kayıt altına alınır.
 
@@ -31,9 +33,16 @@ namespace Entities.Concrete
         [MaxLength(300)]
         public string? Notes { get; set; }
 
-        // Nav (opsiyonel)
+        // Navigation
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(FamilyMemberId))]
+        public FamilyMember FamilyMember { get; set; } = null!;
 
-        public FamilyMember? FamilyMember { get; set; }
-
+        [JsonIgnore]
+        [ValidateNever]
+        [ForeignKey(nameof(FamilyPayoutId))]
+        public FamilyPayout FamilyPayout { get; set; } = null!;
     }
+
 }

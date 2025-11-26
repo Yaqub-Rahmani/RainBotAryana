@@ -31,10 +31,11 @@ namespace Entities.Concrete
 
         /// <summary>Geçerlilik başlangıcı</summary>
         [Required] 
-        public DateOnly EffectiveFrom { get; set; }
+        public DateOnly CreatedAtUtc { get; set; }
 
-        /// <summary>Geçerlilik bitişi (açık uçluysa null)</summary>
-        public DateOnly? EffectiveTo { get; set; }
+        public int CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
 
         [MaxLength(300)] 
         public string? Notes { get; set; }

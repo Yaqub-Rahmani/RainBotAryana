@@ -17,7 +17,7 @@ namespace Business.Abstract
         IDataResult<List<Address>> GetAll();
         IDataResult<Address> GetById(Guid id);
         IDataResult<PagedResult<AddressDetailDto>> GetDetails(QueryOptions opt);
-        IDataResult<List<AddressDetailDto>> GetByOwner(AddressOwnerType ownerType, Guid ownerId);
+        IDataResult<List<AddressDetailDto>> GetByOwner(MediaOwnerType ownerType, Guid ownerId);
 
         // Yazmalar
         IResult Add(Address address);          // IsPrimary=true ise diğerlerini kapatır

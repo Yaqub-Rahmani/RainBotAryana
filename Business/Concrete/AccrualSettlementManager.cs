@@ -1,6 +1,7 @@
 ﻿using Business.Abstract;
 using Business.BusinessAspects.Autofac;
 using Business.ValidationRules.FluentValidation;
+using Business.ValidationRules.FluentValidation.AccrualSettlement;
 using Core.Aspects.Autofac.Caching;
 using Core.Aspects.Autofac.Transaction;
 using Core.Aspects.Autofac.Validation;
@@ -11,9 +12,11 @@ using Core.Utilities.Results;
 using DataAccess.Abstract;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.AccrualSettlement;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -22,244 +25,132 @@ namespace Business.Concrete
 {
     public class AccrualSettlementManager : IAccrualSettlementService
     {
-        private readonly IAccrualSettlementDal _settlementDal;
+        private readonly IAccrualSettlementDal _dal;
         private readonly IAccrualDal _accrualDal;
-        private readonly ICollectionAllocationDal _allocationDal; // varsayım: mevcut
+        private readonly ICollectionAllocationDal _allocDal; // varsayıyorum
 
-        public AccrualSettlementManager(
-            IAccrualSettlementDal settlementDal,
-            IAccrualDal accrualDal,
-            ICollectionAllocationDal allocationDal)
+        public AccrualSettlementManager(IAccrualSettlementDal dal, IAccrualDal accrualDal, ICollectionAllocationDal allocDal)
         {
-            _settlementDal = settlementDal;
+            _dal = dal;
             _accrualDal = accrualDal;
-            _allocationDal = allocationDal;
+            _allocDal = allocDal;
         }
 
-        // ---------- Okuma ----------
-
         [CacheAspect(10)]
-        public IDataResult<List<AccrualSettlement>> GetAll()
-            => new SuccessDataResult<List<AccrualSettlement>>(
-                _settlementDal.QueryNoTracking().OrderByDescending(x => x.SettledAtUtc).ToList()
-            );
+        public IDataResult<List<AccrualSettlement>> GetAll(Guid? accrualId = null)
+        {
+            var q = _dal.QueryNoTracking();
+            if (accrualId.HasValue) q = q.Where(x => x.AccrualId == accrualId.Value);
+            return new SuccessDataResult<List<AccrualSettlement>>(q.OrderByDescending(x => x.SettledAtUtc).ToList());
+        }
 
         [CacheAspect(10)]
         public IDataResult<AccrualSettlement> GetById(Guid id)
         {
-            var e = _settlementDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
+            var e = _dal.Get(x => x.Id == id);
             return e == null
                 ? new ErrorDataResult<AccrualSettlement>(null, "یافت نشد.")
                 : new SuccessDataResult<AccrualSettlement>(e);
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<AccrualSettlementDetailDto>> GetDetails(QueryOptions opt)
+        public IDataResult<AccrualSettlementDetailDto> GetDetail(Guid id)
         {
-            opt ??= new QueryOptions();
+            var e = _dal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
+            if (e == null) return new ErrorDataResult<AccrualSettlementDetailDto>(null, "یافت نشد.");
 
-            var q = _settlementDal.QueryNoTracking();
+            var a = _accrualDal.QueryNoTracking().FirstOrDefault(x => x.Id == e.AccrualId);
+            if (a == null) return new ErrorDataResult<AccrualSettlementDetailDto>(null, "یافت نشد.");
 
-            // Filtreler
-            q = q.ApplyFilters(opt.Filters);
-
-            // Arama
-            if (!string.IsNullOrWhiteSpace(opt.Search))
+            return new SuccessDataResult<AccrualSettlementDetailDto>(new AccrualSettlementDetailDto
             {
-                var key = opt.Search.Trim();
-                q = q.Where(x => EF.Functions.Like(x.Notes ?? "", $"%{key}%"));
+                Id = e.Id,
+                CollectionAllocationId = e.CollectionAllocationId,
+                AccrualId = e.AccrualId,
+                Amount = e.Amount,
+                SettledByUserId = e.SettledByUserId,
+                SettledAtUtc = e.SettledAtUtc,
+                Notes = e.Notes,
+                AccrualAmount = a.Amount,
+                AccrualOutstanding = a.OutstandingAmount,
+                AccrualYear = a.Year,
+                AccrualMonth = a.Month
+            });
+        }
+
+        [ValidationAspect(typeof(AccrualSettlementCreateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualSettlementService.Get")]
+        public IResult Add(AccrualSettlementCreateDto dto, int userId)
+        {
+            var accrual = _accrualDal.Get(x => x.Id == dto.AccrualId);
+            if (accrual == null) return new ErrorResult("بدهی یافت نشد.");
+
+            var alloc = _allocDal.Get(x => x.Id == dto.CollectionAllocationId);
+            if (alloc == null) return new ErrorResult("تخصیص یافت نشد.");
+
+            // İş kuralı: tutar, kalan borcu aşamaz
+            if (dto.Amount <= 0) return new ErrorResult("مبلغ باید بزرگتر از 0 باشد.");
+            if (dto.Amount > accrual.OutstandingAmount)
+            {
+                var maxStr = accrual.OutstandingAmount.ToString(CultureInfo.InvariantCulture);
+                return new ErrorResult($"مبلغ نمی‌تواند از بدهی باقی‌مانده ({maxStr}) بیشتر باشد.");
             }
 
-            // Sıralama
-            var hasSort = opt.Sort != null && opt.Sort.Any();
-            if (hasSort)
+            // Domain update
+            accrual.ApplySettlement(Math.Round(dto.Amount, 2, MidpointRounding.AwayFromZero));
+            accrual.UpdatedByUserId = userId;
+            accrual.UpdatedAtUtc = DateTime.UtcNow;
+            _accrualDal.Update(accrual);
+
+            var entity = new AccrualSettlement
             {
-                q = q.ApplySort(opt.Sort);
-            }
-            else
-            {
-                q = q.OrderByDescending(x => x.SettledAtUtc);
-            }
-
-            // Toplam kayıt
-            var total = q.Count();
-
-            // Projection + Paging
-            var items = q
-                .Select(s => new AccrualSettlementDetailDto
-                {
-                    Id = s.Id,
-                    CollectionAllocationId = s.CollectionAllocationId,
-                    AccrualId = s.AccrualId,
-                    Amount = s.Amount,
-                    SettledAtUtc = s.SettledAtUtc,
-                    Notes = s.Notes,
-
-                    // ReferenceNo kaldırıldı; okunabilir bir isim türetiyoruz
-                    Allocation = new RefDto
-                    {
-                        Id = s.CollectionAllocationId,
-                        Name =
-                            s.CollectionAllocation != null
-                                ? (
-                                    s.CollectionAllocation.PeriodYear.HasValue && s.CollectionAllocation.PeriodMonth.HasValue
-                                        ? $"{s.CollectionAllocation.Kind} {s.CollectionAllocation.PeriodYear}-{(s.CollectionAllocation.PeriodMonth ?? 0).ToString("00")}"
-                                        : s.CollectionAllocation.Kind.ToString()
-                                  )
-                                : "",
-                        Code = null
-                    },
-
-                    Accrual = new RefDto
-                    {
-                        Id = s.AccrualId,
-                        Name =
-                            s.Accrual != null
-                                ? $"{s.Accrual.Kind} {s.Accrual.Year}-{s.Accrual.Month.ToString("00")}"
-                                : "",
-                        Code = null
-                    }
-                })
-                .ApplyPaging(opt.Page, opt.PageSize)
-                .ToList();
-
-            var page = new PagedResult<AccrualSettlementDetailDto>
-            {
-                Items = items,
-                Page = opt.Page,
-                PageSize = opt.PageSize,
-                TotalCount = total
+                Id = Guid.NewGuid(),
+                CollectionAllocationId = dto.CollectionAllocationId,
+                AccrualId = dto.AccrualId,
+                Amount = Math.Round(dto.Amount, 2, MidpointRounding.AwayFromZero),
+                SettledByUserId = userId,
+                SettledAtUtc = DateTime.UtcNow,
+                Notes = dto.Notes
             };
+            _dal.Add(entity);
 
-            return new SuccessDataResult<PagedResult<AccrualSettlementDetailDto>>(page);
+            var amtStr = entity.Amount.ToString(CultureInfo.InvariantCulture);
+            return new SuccessResult($"تسویه با مبلغ {amtStr} ثبت شد.");
         }
 
-        [CacheAspect(10)]
-        public IDataResult<AccrualSettlementDetailDto> GetDetailById(Guid id)
+        [ValidationAspect(typeof(AccrualSettlementUpdateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualSettlementService.Get")]
+        public IResult Update(AccrualSettlementUpdateDto dto, int userId)
         {
-            var dto = _settlementDal.QueryNoTracking()
-                .Where(s => s.Id == id)
-                .Select(s => new AccrualSettlementDetailDto
-                {
-                    Id = s.Id,
-                    CollectionAllocationId = s.CollectionAllocationId,
-                    AccrualId = s.AccrualId,
-                    Amount = s.Amount,
-                    SettledAtUtc = s.SettledAtUtc,
-                    Notes = s.Notes,
+            var e = _dal.Get(x => x.Id == dto.Id);
+            if (e == null) return new ErrorResult("یافت نشد.");
 
-                    Allocation = new RefDto
-                    {
-                        Id = s.CollectionAllocationId,
-                        Name =
-                            s.CollectionAllocation != null
-                                ? (
-                                    s.CollectionAllocation.PeriodYear.HasValue && s.CollectionAllocation.PeriodMonth.HasValue
-                                        ? $"{s.CollectionAllocation.Kind} {s.CollectionAllocation.PeriodYear}-{(s.CollectionAllocation.PeriodMonth ?? 0).ToString("00")}"
-                                        : s.CollectionAllocation.Kind.ToString()
-                                  )
-                                : "",
-                        Code = null
-                    },
-
-                    Accrual = new RefDto
-                    {
-                        Id = s.AccrualId,
-                        Name =
-                            s.Accrual != null
-                                ? $"{s.Accrual.Kind} {s.Accrual.Year}-{s.Accrual.Month.ToString("00")}"
-                                : "",
-                        Code = null
-                    }
-                })
-                .FirstOrDefault();
-
-            return dto == null
-                ? new ErrorDataResult<AccrualSettlementDetailDto>(null, "یافت نشد.")
-                : new SuccessDataResult<AccrualSettlementDetailDto>(dto);
+            // İş kuralı: varsayılan olarak sadece Notlar güncellenir
+            e.Notes = dto.Notes;
+            _dal.Update(e);
+            return new SuccessResult("بروز شد.");
         }
 
-        // ---------- Yazma ----------
-
-        /// <summary>
-        /// Settlement ekler ve aynı transaction içinde Accrual.OutstandingAmount'ı düşürür.
-        /// Ayrıca Accrual.Status'ü günceller. 
-        /// CollectionAllocation için "kalan" kontrolü varsa (örn. RemainingAmount) ona göre doğrulama yap.
-        /// </summary>
-        [SecuredOperation("accrual.settle,admin")]
-        [ValidationAspect(typeof(AccrualSettlementValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IAccrualSettlementService.Get")]
-        [CacheRemoveAspect("IAccrualService.Get")]
-        public IResult Add(AccrualSettlement settlement)
+        [TransactionScopeAspect, CacheRemoveAspect("IAccrualSettlementService.Get")]
+        public IResult Delete(Guid id, int userId)
         {
-            if (settlement.Amount <= 0) return new ErrorResult("مبلغ باید بزرگتر از صفر باشد.");
+            var e = _dal.Get(x => x.Id == id);
+            if (e == null) return new ErrorResult("یافت نشد.");
 
-            var accrual = _accrualDal.Get(x => x.Id == settlement.AccrualId);
-            if (accrual == null) return new ErrorResult("بدهی یافت نشد.");
-            if (accrual.OutstandingAmount <= 0) return new ErrorResult("این بدهی قبلاً تسویه شده است.");
-            if (settlement.Amount > accrual.OutstandingAmount)
-                return new ErrorResult("مبلغ تسویه از بدهی باقیمانده بیشتر است.");
-
-            // (opsiyonel) Allocation kalan kontrolü
-            var allocation = _allocationDal.Get(x => x.Id == settlement.CollectionAllocationId);
-            if (allocation == null) return new ErrorResult("تخصیص گردآوری یافت نشد.");
-            // Örn: allocation.RemainingAmount varsa:
-            // if (allocation.RemainingAmount < settlement.Amount) return new ErrorResult("موجودی تخصیص کافی نیست.");
-
-            // 1) Accrual’ı düşür
-            accrual.ApplySettlement(settlement.Amount);
-            _accrualDal.Update(accrual);
-
-            // 2) Allocation’dan düş (varsa)
-            // allocation.RemainingAmount -= settlement.Amount;
-            // _allocationDal.Update(allocation);
-
-            // 3) Settlement’ı kaydet
-            _settlementDal.Add(settlement);
-
-            return new SuccessResult("تسویه ثبت شد.");
-        }
-
-        /// <summary>
-        /// Settlement siler ve accrual bakiyesini geri artırır (undo).
-        /// </summary>
-        [SecuredOperation("accrual.settle,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IAccrualSettlementService.Get")]
-        [CacheRemoveAspect("IAccrualService.Get")]
-        public IResult Delete(Guid id)
-        {
-            var entity = _settlementDal.Get(x => x.Id == id);
-            if (entity == null) return new ErrorResult("یافت نشد.");
-
-            var accrual = _accrualDal.Get(x => x.Id == entity.AccrualId);
+            var accrual = _accrualDal.Get(x => x.Id == e.AccrualId);
             if (accrual == null) return new ErrorResult("بدهی یافت نشد.");
 
-            // 1) Accrual bakiyesini geri artır
-            accrual.OutstandingAmount = Math.Round(accrual.OutstandingAmount + entity.Amount, 2, MidpointRounding.AwayFromZero);
-            accrual.Status = accrual.OutstandingAmount == 0 ? AccrualStatus.Settled :
-                             (accrual.OutstandingAmount == accrual.Amount ? AccrualStatus.Open : AccrualStatus.PartiallySettled);
+            // Reversal: tahakkuk tutarlarını geri sar
+            accrual.OutstandingAmount = Math.Round(accrual.OutstandingAmount + e.Amount, 2, MidpointRounding.AwayFromZero);
+            accrual.Status = accrual.OutstandingAmount == 0 ? AccrualStatus.Settled
+                               : (accrual.OutstandingAmount == accrual.Amount ? AccrualStatus.Open : AccrualStatus.PartiallySettled);
+            accrual.UpdatedByUserId = userId;
+            accrual.UpdatedAtUtc = DateTime.UtcNow;
             _accrualDal.Update(accrual);
 
-            // 2) Allocation geri yükleme (varsa)
-            // allocation.RemainingAmount += entity.Amount; _allocationDal.Update(allocation);
-
-            // 3) Settlement sil
-            _settlementDal.Delete(entity);
-
-            return new SuccessResult("حذف تسویه انجام شد.");
-        }
-
-        [SecuredOperation("accrual.settle,admin")]
-        [CacheRemoveAspect("IAccrualSettlementService.Get")]
-        public IResult UpdateNote(Guid id, string? notes)
-        {
-            var entity = _settlementDal.Get(x => x.Id == id);
-            if (entity == null) return new ErrorResult("یافت نشد.");
-            entity.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
-            _settlementDal.Update(entity);
-            return new SuccessResult("یادداشت بروزرسانی شد.");
+            _dal.Delete(e);
+            return new SuccessResult("حذف شد.");
         }
     }
+
 }

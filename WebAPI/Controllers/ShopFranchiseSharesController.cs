@@ -64,7 +64,8 @@ namespace WebAPI.Controllers
         public IActionResult Add([FromBody] ShopFranchiseShare dto)
         {
             var r = _service.Add(dto);
-            return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
+            return r.Success ? CreatedAtAction(nameof(Get), 
+                new { id = dto.Id }, dto) : BadRequest(r.Message);
         }
 
         [HttpPut("{id:guid}")]

@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.tenant;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,8 @@ namespace Business.Abstract
         IDataResult<Tenant> GetById(Guid id);
         IDataResult<PagedResult<TenantDetailDto>> GetDetails(QueryOptions opt, bool? onlyActive = null);
         IDataResult<TenantDetailDto> GetDetailById(Guid id);
+
+        IDataResult<List<TenantViewDto>> GetAllTenantView(bool? active = null);
 
         // Yazma
         IResult Add(Tenant entity);

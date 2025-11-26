@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
-    //    (İsteğe bağlı) MarketMember(Aile/Paydaş Temeli)
+    //(İsteğe bağlı) MarketMember(Aile/Paydaş Temeli)
     //Aile fertleri ve ileride “kim neyi görecek” yetkileri için basit bir temel.Şimdilik opsiyonel;
     //market sahibi ve aile bireyleri için bir çatı varlık oluşturmak istersen ekleyebiliriz.
     //İlerleyen adımda “Market Sahibi İç Dağıtım” tablolarına bağlamak için faydalı olur.
