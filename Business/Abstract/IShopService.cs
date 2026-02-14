@@ -14,17 +14,18 @@ namespace Business.Abstract
 {
     public interface IShopService
     {
-        IDataResult<List<Shop>> GetAll(bool? onlyActive = null, Guid? marketId = null, Guid? floorId = null);
         IDataResult<Shop> GetById(Guid id);
-        IDataResult<PagedResult<ShopDetailDto>> GetDetails(QueryOptions opt, Guid? marketId = null, Guid? floorId = null, bool? onlyActive = null);
         Task<IDataResult<List<ShopShareSummaryDto>>> GetShopsWithSharesAsync(Guid ownerId);
-
-        IDataResult<ShopDetailDto> GetDetailById(Guid id);
+        IDataResult<List<ShopDto>> GetShopListView();
         Task<IDataResult<List<FranchiseOwnerShopsDto>>> GetFranchiseOwnerShops(Guid ownerId);
         Task<IDataResult<List<ShopPickerDto>>> GetAvailableShopsAsync();
 
-        IResult Add(Shop entity);
+        IResult Add(ShopCreateDto entityn, int userId);
         IResult Update(Shop entity);
         IResult Delete(Guid id);
+
+        Task<IDataResult<PagedResult<ShopShareSummaryDto>>> GetMyShopsPagedAsync(Guid ownerId, QueryOptions opt);
+        Task<IDataResult<PagedResult<ShopShareSummaryDto>>> GetAvailableShopsPagedAsync(Guid ownerId, QueryOptions opt);
+
     }
 }

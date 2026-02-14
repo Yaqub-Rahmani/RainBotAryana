@@ -15,7 +15,7 @@ namespace Entities.Dtos.Accrual
         public Guid TenantId { get; set; }
         public Guid ContractId { get; set; }
         public Guid? MeterReadingId { get; set; }
-        public AccrualKind Kind { get; set; }
+        public AllocationKind Kind { get; set; }
         public int Year { get; set; }
         public int Month { get; set; }
         public DateTime CreatedAtUtc { get; set; }

@@ -559,9 +559,6 @@ namespace DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Balance")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<DateTime>("CreateAt")
                         .HasColumnType("datetime2");
 
@@ -581,19 +578,111 @@ namespace DataAccess.Migrations
                     b.Property<int>("Gender")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("Interest")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<string>("NationalId")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("NationalId");
+
+                    b.ToTable("Employee", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.Concrete.EmployeeTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("MoneyEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PaidAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("EmployeeId", "Year", "Month");
+
+                    b.ToTable("EmployeeTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.Concrete.EmployeeWorkInfo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Interest")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("PayDay")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("Salary")
+                    b.Property<decimal>("SalaryAmount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("SalaryCurrency")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("Taxes")
                         .HasColumnType("decimal(18,2)");
@@ -606,7 +695,10 @@ namespace DataAccess.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Employee");
+                    b.HasIndex("EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeWorkInfos", (string)null);
                 });
 
             modelBuilder.Entity("Entities.Concrete.Expense", b =>
@@ -664,7 +756,9 @@ namespace DataAccess.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("Expense");
+                    b.HasIndex("EmployeeId", "Category", "OccurredAtUtc");
+
+                    b.ToTable("Expense", (string)null);
                 });
 
             modelBuilder.Entity("Entities.Concrete.FamilyBalanceEntry", b =>
@@ -682,6 +776,12 @@ namespace DataAccess.Migrations
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Direction")
                         .HasColumnType("int");
 
@@ -690,6 +790,9 @@ namespace DataAccess.Migrations
 
                     b.Property<Guid?>("FamilyPayoutId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(300)
@@ -700,6 +803,25 @@ namespace DataAccess.Migrations
 
                     b.Property<Guid?>("OwnerDistributionId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("PeriodMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PeriodYear")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -734,7 +856,13 @@ namespace DataAccess.Migrations
                     b.Property<int>("Gender")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IncludeInShare")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsParent")
                         .HasColumnType("bit");
 
                     b.Property<string>("NationalId")
@@ -1377,6 +1505,9 @@ namespace DataAccess.Migrations
                     b.Property<int>("CreatedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
@@ -1571,6 +1702,15 @@ namespace DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("AreaM2")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("FloorId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1587,6 +1727,12 @@ namespace DataAccess.Migrations
                     b.Property<string>("UnitNumber")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1643,6 +1789,9 @@ namespace DataAccess.Migrations
 
                     b.Property<int>("CreatedByUserId")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(300)
@@ -2127,6 +2276,17 @@ namespace DataAccess.Migrations
                         .IsRequired();
 
                     b.Navigation("Province");
+                });
+
+            modelBuilder.Entity("Entities.Concrete.EmployeeWorkInfo", b =>
+                {
+                    b.HasOne("Entities.Concrete.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Entities.Concrete.Expense", b =>

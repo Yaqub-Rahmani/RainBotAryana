@@ -12,5 +12,6 @@ namespace DataAccess.Abstract
     {
         IQueryable<Shop> Query();
         IQueryable<Shop> QueryNoTracking();
+        IQueryable<Shop> QueryWithIncludes();
     }
 }

@@ -14,13 +14,10 @@ namespace Business.Abstract
 {
     public interface IAccrualSettlementService
     {
-        // Okuma
-        IDataResult<List<AccrualSettlement>> GetAll(Guid? accrualId = null);
-        IDataResult<AccrualSettlement> GetById(Guid id);
-        IDataResult<AccrualSettlementDetailDto> GetDetail(Guid id);
+        IDataResult<AccrualSettlementDto> GetById(Guid id);
+        IDataResult<List<AccrualSettlementDto>> GetByAccrual(Guid accrualId);
+        IDataResult<List<AccrualSettlementDto>> GetByAllocation(Guid collectionAllocationId);
 
         IResult Add(AccrualSettlementCreateDto dto, int userId);
-        IResult Update(AccrualSettlementUpdateDto dto, int userId);
-        IResult Delete(Guid id, int userId);
     }
 }

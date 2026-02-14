@@ -1,8 +1,10 @@
-﻿using Core.Utilities.Paging;
+﻿using Business.ValidationRules.FluentValidation.FamilyMember;
+using Core.Utilities.Paging;
 using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.FamilyMember;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,18 +16,19 @@ namespace Business.Abstract
     public interface IFamilyMemberService
     {
         // Okumalar
-        IDataResult<List<FamilyMember>> GetAll(bool? active = null);
-        IDataResult<FamilyMember> GetById(Guid id);
-        IDataResult<PagedResult<FamilyMemberDetailDto>> GetDetails(QueryOptions opt, bool? active = null);
-        IDataResult<FamilyMemberDetailDto> GetDetailById(Guid id);
+        IDataResult<List<FamilyMemberDto>> GetAll(bool includeInactive = false);
+        IDataResult<FamilyMemberDto> GetById(Guid id);
 
-        // Yazmalar
-        IResult Add(FamilyMember member);
-        IResult Update(FamilyMember member);
+
+        IDataResult<List<FamilyMemberViewDto>> GetAllFamilyView(bool? active = null);
+
+        // Profile (detail screen)
+        Task<IResult> UpsertFingerprintAsync(Guid id, FamilyMemberFingerprintUpsertDto dto);
+
+
+        IDataResult<FamilyMemberProfileDto> GetProfile(Guid familyMemberId);
+        IResult Add(FamilyMemberCreateDto dto);
+        IResult Update(FamilyMemberUpdateDto dto);
         IResult Delete(Guid id);
-
-        // İşlemsel
-        IResult Activate(Guid id);
-        IResult Deactivate(Guid id);
     }
 }

@@ -16,7 +16,7 @@ namespace WebAPI.Controllers
         // Okumalar
         [HttpGet]
         [AllowAnonymous]
-        public IActionResult GetAll([FromQuery] Guid? accountId, [FromQuery] ReserveEntryDirection? dir, [FromQuery] DateTime? fromUtc, [FromQuery] DateTime? toUtc)
+        public IActionResult GetAll([FromQuery] Guid? accountId, [FromQuery] BalanceDirection? dir, [FromQuery] DateTime? fromUtc, [FromQuery] DateTime? toUtc)
             => Ok(_service.GetAll(accountId, dir, fromUtc, toUtc).Data);
 
         [HttpGet("{id:guid}")]
@@ -29,7 +29,7 @@ namespace WebAPI.Controllers
 
         [HttpGet("details")]
         [AllowAnonymous]
-        public IActionResult GetDetails([FromQuery] QueryOptions opt, [FromQuery] Guid? accountId, [FromQuery] ReserveEntryDirection? dir, [FromQuery] DateTime? fromUtc, [FromQuery] DateTime? toUtc)
+        public IActionResult GetDetails([FromQuery] QueryOptions opt, [FromQuery] Guid? accountId, [FromQuery] BalanceDirection? dir, [FromQuery] DateTime? fromUtc, [FromQuery] DateTime? toUtc)
         {
             var r = _service.GetDetails(opt, accountId, dir, fromUtc, toUtc);
             return r.Success ? Ok(r.Data) : BadRequest(r.Message);

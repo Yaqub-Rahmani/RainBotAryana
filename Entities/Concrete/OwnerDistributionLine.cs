@@ -7,8 +7,6 @@ using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    // OwnerDistributionLine (isteğe bağlı, kategori bazlı satır)
-    // Daha detaylı raporlama için OwnerDistribution’a bağlı satırlar.
     public enum DistributionPart
     {
         Tax = 1,         // Maliye

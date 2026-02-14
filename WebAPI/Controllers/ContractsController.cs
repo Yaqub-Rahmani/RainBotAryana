@@ -33,11 +33,15 @@ namespace WebAPI.Controllers
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("list-items"), AllowAnonymous]
-        public IActionResult GetListItems()
+        [HttpGet("list-items")]
+        [AllowAnonymous]
+        public IActionResult GetListItems([FromQuery] QueryOptions opt)
         {
-            var r = _service.GetListItems();
-            return r.Success ? Ok(r.Data) : NotFound(r.Message);
+            var result = _service.GetListItems(opt);
+
+            return result.Success
+                ? Ok(result.Data)
+                : BadRequest(result.Message);
         }
 
 

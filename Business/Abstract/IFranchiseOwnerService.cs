@@ -24,8 +24,10 @@ namespace Business.Abstract
         // >>> Owner View (liste + paged)
         IDataResult<List<FranchiseOwnerViewDto>> GetAllOwnerView(bool? active = null);
         IDataResult<PagedResult<FranchiseOwnerViewDto>> GetOwnerViews(QueryOptions opt, bool? active = null);
+        Task<IDataResult<FranchiseOwnerBalanceEntryPageDto>> GetBalanceEntries(Guid ownerId, FranchiseOwnerBalanceEntryQueryOptions opt);
 
         IDataResult<OwnerProfileDto> GetProfile(Guid ownerId);
+        Task<IResult> UpsertFingerprintAsync(Guid ownerId, FranchiseOwnerFingerprintUpsertDto dto);
 
         // Yazma
         IResult Add(FranchiseOwner owner);

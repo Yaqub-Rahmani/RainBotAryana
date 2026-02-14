@@ -14,9 +14,9 @@ namespace Business.Abstract
     public interface IReserveEntryService
     {
         // Okumalar
-        IDataResult<List<ReserveEntry>> GetAll(Guid? accountId = null, ReserveEntryDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null);
+        IDataResult<List<ReserveEntry>> GetAll(Guid? accountId = null, BalanceDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null);
         IDataResult<ReserveEntry> GetById(Guid id);
-        IDataResult<PagedResult<ReserveEntryDetailDto>> GetDetails(QueryOptions opt, Guid? accountId = null, ReserveEntryDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null);
+        IDataResult<PagedResult<ReserveEntryDetailDto>> GetDetails(QueryOptions opt, Guid? accountId = null, BalanceDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null);
         IDataResult<ReserveEntryDetailDto> GetDetailById(Guid id);
 
         // Bakiye

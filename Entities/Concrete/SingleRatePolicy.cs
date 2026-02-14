@@ -9,13 +9,10 @@ using Core.Entities;
 
 namespace Entities.Concrete
 {
-    //Elektrik & Market Rezerv Oranları(tek oranlı politikalar)
-
-
     public enum SingleRateType
     {
-        ElectricityReserve = 1, // Elektrik tahsilatına uygulanacak % (örn. 10.00)
-        MarketReserve = 2       // Market payına uygulanacak % (örn. 10.00)
+        ElectricityReserve = 1,
+        MarketReserve = 2      
     }
     public class SingleRatePolicy: IEntity
     {
@@ -25,11 +22,9 @@ namespace Entities.Concrete
         [Required] 
         public SingleRateType Type { get; set; }
 
-        /// <summary>Yüzde değer (örn. 10.00 = %10)</summary>
         [Column(TypeName = "decimal(5,2)")]
         public decimal RatePercent { get; set; }
 
-        /// <summary>Geçerlilik başlangıcı</summary>
         [Required] 
         public DateOnly CreatedAtUtc { get; set; }
 
@@ -39,5 +34,6 @@ namespace Entities.Concrete
 
         [MaxLength(300)] 
         public string? Notes { get; set; }
+        public bool IsActive { get; set; }
     }
 }

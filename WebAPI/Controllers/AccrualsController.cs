@@ -43,6 +43,20 @@ namespace WebAPI.Controllers
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
+        /// <summary>
+        /// Bir sözleşmenin (ContractId) açık borçlarını döner.
+        /// GET api/Accrual/open-debts-by-contract/{contractId}
+        /// </summary>
+        [HttpGet("open-debts-by-contract/{contractId:guid}")]
+        public IActionResult GetOpenDebtsForContract(Guid contractId)
+        {
+            var result = _service.GetOpenDebtsForContract(contractId);
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Data);
+        }
+
         [HttpPut("{id:guid}"), Authorize]
         public IActionResult Update(Guid id, [FromBody] AccrualUpdateDto dto)
         {

@@ -22,9 +22,14 @@ namespace Business.Abstract
         IResult Update(AccrualUpdateDto dto, int userId);
         IResult Delete(Guid id);
 
+        /// <summary>
+        /// Belirli sözleşme için (ContractId) OutstandingAmount > 0 olan Accrual satırlarını döndürür.
+        /// </summary>
+        IDataResult<List<AccrualOpenItemDto>> GetOpenDebtsForContract(Guid contractId);
+
         // İşlemler
-        IResult Settle(AccrualSettleDto dto, int userId); // kısmi/nihai
-        IResult Reopen(Guid id, int userId);              // Settled -> Open (iş kuralına göre)
-        IResult RecalculateOutstanding(Guid id);          // Amount / settlements bazlı yeniden hesap
+        IResult Settle(AccrualSettleDto dto, int userId);
+        IResult Reopen(Guid id, int userId);
+        IResult RecalculateOutstanding(Guid id);
     }
 }

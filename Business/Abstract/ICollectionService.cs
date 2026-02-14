@@ -14,12 +14,20 @@ namespace Business.Abstract
 {
     public interface ICollectionService
     {
-        IDataResult<List<Collection>> GetAll(Guid? tenantId = null, Guid? shopId = null, DateTime? fromUtc = null, DateTime? toUtc = null);
-        IDataResult<Collection> GetById(Guid id);
-        IDataResult<CollectionDetailDto> GetDetail(Guid id);
+        IDataResult<CollectionDto> GetById(Guid id);
+        IDataResult<List<CollectionDto>> GetByTenant(Guid tenantId);
 
+        /// <summary>
+        /// Tahsilat kaydı + MoneyEntry (dolar izi) oluşturur, IsApproved = false.
+        /// </summary>
         IResult Add(CollectionCreateDto dto, int userId);
-        IResult Update(CollectionUpdateDto dto, int userId);
-        IResult Delete(Guid id);
+
+        /// <summary>
+        /// Tahsilatı onaylar (B kullanıcısı).
+        /// Dağıtım / rezerv operasyonları ileride bu aşamaya bağlanacak.
+        /// </summary>
+        IResult Approve(CollectionApproveDto dto, int userId);
+
+        IResult AddContractDebtPayment(ContractDebtPaymentRequestDto dto, int userId);
     }
 }

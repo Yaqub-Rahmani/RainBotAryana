@@ -30,5 +30,14 @@ namespace Business.Abstract
         // İşlemsel
         IResult Activate(Guid id);
         IResult Deactivate(Guid id);
+
+        // + using Core.Utilities.Paging;
+        // + using Entities.Dtos.tenant;
+
+    IDataResult<TenantProfileDto> GetProfile(Guid id);
+    IDataResult<List<TenantContractBriefDto>> GetContracts(Guid id);
+    Task<IResult> UpsertFingerprintAsync(Guid id, TenantFingerprintUpsertDto dto);
+    Task<IDataResult<TenantPeriodSummaryPageDto>> GetPeriodSummaries(Guid id, QueryOptions opt);
+
     }
 }

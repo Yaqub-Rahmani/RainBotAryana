@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
-    public class Employee: IEntity
+    public class Employee : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -25,26 +25,13 @@ namespace Entities.Concrete
         [MaxLength(20)]
         public string NationalId { get; set; }
 
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal Salary { get; set; }
-
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal Interest { get; set; }
-
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal Taxes { get; set; }
-
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal Balance { get; set; }
-
         public DateTime CreateAt { get; set; } = DateTime.UtcNow;
 
         public int CreatedByUserId { get; set; }
         public int? UpdatedByUserId { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
 
-        [Range(1, 31)]
-        public int PayDay { get; set; }
+        public bool IsActive { get; set; } = true;
 
     }
 }

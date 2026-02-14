@@ -11,9 +11,6 @@ using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
-    //    FamilyMember(Aile Üyesi)
-    //Aile fertleri için hesap sahibi kimliği. (Sadece market payından gelen dağıtım görünür.)
-
     public enum Gender { Unknown = 0, Male = 1, Female = 2 }
 
     public class FamilyMember : IEntity
@@ -31,11 +28,14 @@ namespace Entities.Concrete
         [MaxLength(20)]
         public string NationalId { get; set; }
 
-        /// <summary>Örn. Parent, Daughter, Son, Spouse… (rapor filtresi için basit etiket)</summary>
         [MaxLength(50)]
         public string? RelationTag { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        public bool IsParent { get; set; } = true!;
+
+        public bool IncludeInShare { get; set; } = true;
 
         [JsonIgnore]
         [ValidateNever]

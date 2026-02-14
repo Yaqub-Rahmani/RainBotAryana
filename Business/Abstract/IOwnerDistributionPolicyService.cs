@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.OwnerDistributionPolicy;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,19 +14,16 @@ namespace Business.Abstract
 {
     public interface IOwnerDistributionPolicyService
     {
-        // Reads
-        IDataResult<List<OwnerDistributionPolicy>> GetAll();
-        IDataResult<OwnerDistributionPolicy> GetById(Guid id);
-        IDataResult<PagedResult<OwnerDistributionPolicyDetailDto>> GetDetails(QueryOptions opt);
-        IDataResult<OwnerDistributionPolicyDetailDto> GetDetailById(Guid id);
-        IDataResult<OwnerDistributionPolicyDetailDto> GetActiveForDate(DateOnly onDate);
+        IDataResult<List<OwnerDistributionPolicyDto>> GetAll();
+        IDataResult<OwnerDistributionPolicyDto> GetById(Guid id);
 
-        // Writes
-        IResult Add(OwnerDistributionPolicy policy);
-        IResult Update(OwnerDistributionPolicy policy);
+        /// <summary>
+        /// Belirli bir tarih için (veya bugün) geçerli owner dağıtım politikası.
+        /// </summary>
+        IDataResult<OwnerDistributionPolicyDto> GetCurrent();
+
+        IResult Add(OwnerDistributionPolicyCreateDto dto, int userId);
+        IResult Update(OwnerDistributionPolicyUpdateDto dto, int userId);
         IResult Delete(Guid id);
-
-        // Simulation
-        IDataResult<object> Simulate(decimal ownerAmount, DateOnly? onDate = null);
     }
 }

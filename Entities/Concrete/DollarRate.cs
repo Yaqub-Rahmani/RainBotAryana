@@ -12,9 +12,9 @@ namespace Entities.Concrete
     {
         public int Id { get; set; }
 
-        public DateTime EffectiveFromUtc { get; set; }   // Bu andan itibaren geçerli
+        public DateTime EffectiveFromUtc { get; set; }  
         [Column(TypeName = "decimal(18,6)")]
-        public decimal AfnPerUsd { get; set; }           // 1 USD = kaç AFN
+        public decimal AfnPerUsd { get; set; }         
 
         public int CreatedByUserId { get; set; }
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

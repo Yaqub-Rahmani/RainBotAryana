@@ -31,6 +31,8 @@ namespace Business.Concrete
         private readonly IPhoneDal _phoneDal;                           // Primary phone
         private readonly IAddressDal _addrDal;                          // Primary address (Province/District dahil)
         private readonly IFranchiseOwnerBalanceDal _ownerBalanceDal;    // Özet bakiye (Balance)
+        private readonly IBiometricDal _biometricDal;
+
 
         public FranchiseOwnerManager(
             IFranchiseOwnerDal ownerDal,
@@ -40,6 +42,9 @@ namespace Business.Concrete
             IPhoneDal phoneDal,
             IAddressDal addrDal,
             IFranchiseOwnerBalanceDal ownerBalanceDal
+            ,
+            IBiometricDal biometricDal
+
         )
         {
             _ownerDal = ownerDal;
@@ -50,6 +55,7 @@ namespace Business.Concrete
             _phoneDal = phoneDal;
             _addrDal = addrDal;
             _ownerBalanceDal = ownerBalanceDal;
+            _biometricDal = biometricDal;
         }
 
         // -------- Okumalar --------
@@ -242,19 +248,54 @@ namespace Business.Concrete
         }
 
         // -------- Yazmalar --------
+        [CacheRemoveAspect(".*FranchiseOwner.*Get.*")]
+        public async Task<IResult> UpsertFingerprintAsync(Guid ownerId, FranchiseOwnerFingerprintUpsertDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.TemplateBase64))
+                return new ErrorResult("TemplateBase64 zorunlu.");
 
-        //[SecuredOperation("franchiseowner.write,admin")]
-        //[ValidationAspect(typeof(FranchiseOwnerValidator))]
-        //[TransactionScopeAspect]
-        //[CacheRemoveAspect("IFranchiseOwnerService.Get")]
-        //public IResult Add(FranchiseOwner owner)
-        //{
-        //    var dup = _ownerDal.Get(x => x.DisplayName.ToLower() == owner.DisplayName.ToLower());
-        //    if (dup != null) return new ErrorResult("مالک/امتیاز با همین نام وجود دارد.");
+            var exists = await _ownerDal.QueryNoTracking().AnyAsync(x => x.Id == ownerId);
+            if (!exists) return new ErrorResult("صاحب امتیاز یافت نشد.");
 
-        //    _ownerDal.Add(owner);
-        //    return new SuccessResult("صاحب امتیاز افزوده شد.");
-        //}
+            var templateBytes = DecodeBase64(dto.TemplateBase64);
+
+            var actives = await _biometricDal.Query()
+                .Where(x => x.OwnerType == MediaOwnerType.FranchiseOwner
+                         && x.OwnerId == ownerId
+                         && x.Type == BiometricType.Fingerprint
+                         && x.IsActive)
+                .ToListAsync();
+
+            foreach (var a in actives)
+            {
+                a.IsActive = false;
+                _biometricDal.Update(a);
+            }
+
+            var bio = new Biometric
+            {
+                Id = Guid.NewGuid(),
+                OwnerType = MediaOwnerType.FranchiseOwner,
+                OwnerId = ownerId,
+                Type = BiometricType.Fingerprint,
+                Template = templateBytes,
+                RelatedMediaAssetId = dto.RelatedMediaAssetId,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _biometricDal.Add(bio);
+            return new SuccessResult("اثر انگشت بروزرسانی شد.");
+        }
+
+        private static byte[] DecodeBase64(string input)
+        {
+            var s = (input ?? "").Trim();
+            var idx = s.IndexOf("base64,", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0) s = s.Substring(idx + "base64,".Length);
+            return Convert.FromBase64String(s);
+        }
+
 
         [SecuredOperation("franchiseowner.write,admin")]
         [ValidationAspect(typeof(FranchiseOwnerValidator))]
@@ -396,13 +437,20 @@ namespace Business.Concrete
                 .GroupBy(x => x.OwnerId)
                 .ToDictionary(g => g.Key, g => FormatAddress(g.First().ProvinceName, g.First().DistrictName, g.First().Line1));
 
-            // 5) Balance
-            var balances = _ownerBalanceDal.QueryNoTracking()
-                .Where(b => ownerIds.Contains(b.FranchiseOwnerId))
-                .Select(b => new { b.FranchiseOwnerId, b.Balance })
+            // 5) Balance (FranchiseBalanceEntry üzerinden)
+            var balances = _balanceEntryDal.QueryNoTracking()
+                .Where(e => ownerIds.Contains(e.FranchiseOwnerId) && e.IsActive)
+                .GroupBy(e => e.FranchiseOwnerId)
+                .Select(g => new
+                {
+                    FranchiseOwnerId = g.Key,
+                    Balance =
+                        (g.Where(x => x.Direction == BalanceDirection.In).Sum(x => (decimal?)x.Amount) ?? 0m)
+                      - (g.Where(x => x.Direction == BalanceDirection.Out).Sum(x => (decimal?)x.Amount) ?? 0m)
+                })
                 .ToList()
-                .GroupBy(x => x.FranchiseOwnerId)
-                .ToDictionary(g => g.Key, g => g.First().Balance);
+                .ToDictionary(x => x.FranchiseOwnerId, x => x.Balance);
+
 
             // 6) Birleştir
             var result = owners.Select(o => new FranchiseOwnerViewDto
@@ -507,13 +555,21 @@ namespace Business.Concrete
                 .GroupBy(x => x.OwnerId)
                 .ToDictionary(g => g.Key, g => FormatAddress(g.First().ProvinceName, g.First().DistrictName, g.First().Line1));
 
-            // 7) Balances
-            var balances = _ownerBalanceDal.QueryNoTracking()
-                .Where(b => ids.Contains(b.FranchiseOwnerId))
-                .Select(b => new { b.FranchiseOwnerId, b.Balance })
+
+            // 7) Balances (FranchiseBalanceEntry üzerinden)
+            var balances = _balanceEntryDal.QueryNoTracking()
+                .Where(e => ids.Contains(e.FranchiseOwnerId) && e.IsActive)
+                .GroupBy(e => e.FranchiseOwnerId)
+                .Select(g => new
+                {
+                    FranchiseOwnerId = g.Key,
+                    Balance =
+                        (g.Where(x => x.Direction == BalanceDirection.In).Sum(x => (decimal?)x.Amount) ?? 0m)
+                      - (g.Where(x => x.Direction == BalanceDirection.Out).Sum(x => (decimal?)x.Amount) ?? 0m)
+                })
                 .ToList()
-                .GroupBy(x => x.FranchiseOwnerId)
-                .ToDictionary(g => g.Key, g => g.First().Balance);
+                .ToDictionary(x => x.FranchiseOwnerId, x => x.Balance);
+
 
             // 8) Merge
             var items = page.Select(o => new FranchiseOwnerViewDto
@@ -617,11 +673,30 @@ namespace Business.Concrete
                      orderby m.IsPrimary descending, m.Id descending
                      select m.StorageUrl).FirstOrDefault()
 
-                // Balance (özet tablo: tek satır varsayımı)
-                let bal =
-                    (from b in _ownerBalanceDal.QueryNoTracking()
-                     where b.FranchiseOwnerId == o.Id
-                     select new { b.Balance /*, b.CurrencyCode*/ }).FirstOrDefault()
+                // Balance (FranchiseBalanceEntry’den)
+                //let bal =
+                //    (from b in _balanceEntryDal.QueryNoTracking()
+                //     where b.FranchiseOwnerId == o.Id
+                //     group b by 1 into g
+                //     select new
+                //     {
+                //         Balance =
+                //             (g.Where(x => x.Direction == BalanceDirection.In).Sum(x => (decimal?)x.Amount) ?? 0m)
+                //           - (g.Where(x => x.Direction == BalanceDirection.Out).Sum(x => (decimal?)x.Amount) ?? 0m)
+                //     }).FirstOrDefault()
+
+                    let bal =
+                        (from b in _balanceEntryDal.QueryNoTracking()
+                        where b.FranchiseOwnerId == o.Id
+                        group b by 1 into g
+                        select new
+                        {
+                            Balance = g.Sum(x => x.Direction == BalanceDirection.In
+                                ? (decimal?)x.Amount
+                                : -(decimal?)x.Amount) ?? 0m
+                        }).FirstOrDefault()
+
+
 
                 select new OwnerProfileDto
                 {
@@ -688,6 +763,97 @@ namespace Business.Concrete
 
             return new SuccessDataResult<OwnerProfileDto>(dto);
         }
+
+        public async Task<IDataResult<FranchiseOwnerBalanceEntryPageDto>> GetBalanceEntries(
+            Guid ownerId,
+            FranchiseOwnerBalanceEntryQueryOptions opt)
+        {
+            if (ownerId == Guid.Empty)
+                return new ErrorDataResult<FranchiseOwnerBalanceEntryPageDto>(null, "ownerId is required.");
+
+            var q = _balanceEntryDal.QueryNoTracking()
+                .Where(x => x.FranchiseOwnerId == ownerId);
+
+            // Date filter (FromDate <= OccurredAtUtc < ToDate+1)
+            if (opt.FromDate.HasValue)
+            {
+                var from = DateTime.SpecifyKind(opt.FromDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+                q = q.Where(x => x.OccurredAtUtc >= from);
+            }
+            if (opt.ToDate.HasValue)
+            {
+                var toExclusive = DateTime.SpecifyKind(opt.ToDate.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+                q = q.Where(x => x.OccurredAtUtc < toExclusive);
+            }
+
+            if (opt.Direction.HasValue)
+                q = q.Where(x => x.Direction == opt.Direction.Value);
+
+            if (opt.PaymentMethod.HasValue)
+                q = q.Where(x => x.PaymentMethod == opt.PaymentMethod.Value);
+
+            if (opt.MinAmount.HasValue)
+                q = q.Where(x => x.Amount >= opt.MinAmount.Value);
+
+            if (opt.MaxAmount.HasValue)
+                q = q.Where(x => x.Amount <= opt.MaxAmount.Value);
+
+            if (!string.IsNullOrWhiteSpace(opt.Search))
+            {
+                var s = opt.Search.Trim();
+                q = q.Where(x =>
+                    (x.Notes != null && x.Notes.Contains(s)) ||
+                    (x.PaymentReference != null && x.PaymentReference.Contains(s)));
+            }
+
+            // Özet (filtrelenmiş tüm kayıtlar için)
+            var summary = await q
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    TotalIn = g.Where(x => x.Direction == BalanceDirection.In).Sum(x => (decimal?)x.Amount) ?? 0m,
+                    TotalOut = g.Where(x => x.Direction == BalanceDirection.Out).Sum(x => (decimal?)x.Amount) ?? 0m
+                })
+                .FirstOrDefaultAsync();
+
+            var total = await q.CountAsync();
+
+            // Sıralama: profil için en mantıklısı newest-first
+            q = q.OrderByDescending(x => x.OccurredAtUtc).ThenByDescending(x => x.CreatedAtUtc);
+
+            var pageItems = await q
+                .Skip((opt.Page - 1) * opt.PageSize)
+                .Take(opt.PageSize)
+                .Select(x => new FranchiseOwnerBalanceEntryListItemDto
+                {
+                    Id = x.Id,
+                    OccurredAtUtc = x.OccurredAtUtc,
+                    Direction = x.Direction,
+                    Amount = x.Amount,
+                    PaymentMethod = x.PaymentMethod,
+                    PaymentReference = x.PaymentReference,
+                    Notes = x.Notes,
+                    CreatedByUserId = x.CreatedByUserId,
+                    CreatedAtUtc = x.CreatedAtUtc
+                })
+                .ToListAsync();
+
+            var result = new FranchiseOwnerBalanceEntryPageDto
+            {
+                Page = new PagedResult<FranchiseOwnerBalanceEntryListItemDto>
+                {
+                    Items = pageItems,
+                    Page = opt.Page,
+                    PageSize = opt.PageSize,
+                    TotalCount = total
+                },
+                TotalIn = summary?.TotalIn ?? 0m,
+                TotalOut = summary?.TotalOut ?? 0m
+            };
+
+            return new SuccessDataResult<FranchiseOwnerBalanceEntryPageDto>(result);
+        }
+
 
     }
 }

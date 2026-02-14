@@ -13,8 +13,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Entities.Concrete
 {
-    //    (MeterReading) ile devam ediyorum.Bu entity, her dükkân için aylık tüketimi ve %10 rezerv hesabını standartlaştırır.
-    //3) Elektrik – MeterReading
     public class MeterReading : IEntity
     {
         [Key] public Guid Id { get; set; }
@@ -30,10 +28,10 @@ namespace Entities.Concrete
         // Audit
         public int? CreatedByUserId { get; set; }
         public int? UpdatedByUserId { get; set; }
-        public DateTimeOffset CreatedAt { get; set; }              // NEW (zorunlu)
-        public DateTimeOffset? UpdatedAt { get; set; }             // CHANGED: DateOnly -> DateTimeOffset
+        public DateTimeOffset CreatedAt { get; set; }             
+        public DateTimeOffset? UpdatedAt { get; set; }            
 
-        // Sayaç endeksleri
+
         [Precision(18, 3)] public decimal PreviousIndex { get; set; }
         [Precision(18, 3)] public decimal CurrentIndex { get; set; }
 
@@ -54,10 +52,10 @@ namespace Entities.Concrete
 
         // İş akışı
         public bool IsFinalized { get; set; }
-        public int? FinalizedByUserId { get; set; }              // NEW
-        public DateTimeOffset? FinalizedAt { get; set; }          // NEW
+        public int? FinalizedByUserId { get; set; }           
+        public DateTimeOffset? FinalizedAt { get; set; }    
 
-        [Timestamp] public byte[] RowVersion { get; set; } = Array.Empty<byte>(); // NEW
+        [Timestamp] public byte[] RowVersion { get; set; } = Array.Empty<byte>(); 
 
         // Navigation
         [JsonIgnore, ValidateNever, ForeignKey(nameof(ShopId))]

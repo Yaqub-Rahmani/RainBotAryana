@@ -18,9 +18,9 @@ namespace Entities.Concrete
         public BalanceDirection Direction { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
-        public decimal Amount { get; set; }        // Hesabın para biriminde (AFN / USD)
+        public decimal Amount { get; set; }       
 
-        public Currency Currency { get; set; }     // Hesabın para birimi
+        public Currency Currency { get; set; }   
 
         // Hareket anındaki kur
         [Column(TypeName = "decimal(18,6)")]

@@ -1,6 +1,8 @@
 ﻿using Business.Abstract;
 using Core.Utilities.Query;
+using Core.Utilities.Results;
 using Entities.Concrete;
+using Entities.Dtos.FranchiseOwner;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -118,6 +120,34 @@ namespace WebAPI.Controllers
             return Ok(result.Data);
         }
 
+        /// <summary>
+        /// FranchiseOwner profil ekranı: para giriş/çıkış hareketleri (sayfalı + filtreli)
+        /// </summary>
+        /// <param name="ownerId">FranchiseOwner Id</param>
+        /// <param name="opt">Sayfalama + filtreler</param>
+        [HttpGet("{ownerId:guid}/balance-entries")]
+        [ProducesResponseType(typeof(IDataResult<FranchiseOwnerBalanceEntryPageDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetBalanceEntries(
+            [FromRoute] Guid ownerId,
+            [FromQuery] FranchiseOwnerBalanceEntryQueryOptions opt)
+        {
+            // Minimal defensive defaults (QueryOptions sizin projede zaten varsa buna gerek kalmayabilir)
+            if (opt == null) opt = new FranchiseOwnerBalanceEntryQueryOptions();
+            if (opt.Page <= 0) opt.Page = 1;
+            if (opt.PageSize <= 0) opt.PageSize = 20;
+            if (opt.PageSize > 200) opt.PageSize = 200;
+
+            var result = await _service.GetBalanceEntries(ownerId, opt);
+            return Ok(result);
+        }
+
+        [HttpPost("{ownerId:guid}/fingerprint")]
+        [Authorize]
+        public async Task<IActionResult> UpsertFingerprint([FromRoute] Guid ownerId, [FromBody] FranchiseOwnerFingerprintUpsertDto dto)
+        {
+            var r = await _service.UpsertFingerprintAsync(ownerId, dto);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+        }
 
     }
 }

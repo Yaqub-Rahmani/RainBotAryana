@@ -12,35 +12,30 @@ using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
-    //    1) Çekirdek Varlıklar
-    //Shop(Dükkân)
-    //Bir dükkânı temsil eder.
-    //Fiziksel konum bilgilerini (kat, numara) saklar.
-    //Bir dükkânda tek aktif kiracı olacak kuralı ileride Sözleşme katmanında uygulanacak; burada sadece referans varlık.
-
     public class Shop : IEntity
     {
         [Key]
         public Guid Id { get; set; }
 
-        // --- Yeni FK'ler ---
-        /// <summary>Bağlı olduğu Market</summary>
         [Required]
         public Guid MarketId { get; set; }
 
-        /// <summary>Bağlı olduğu Kat (MarketFloor)</summary>
         [Required]
         public Guid FloorId { get; set; }
 
-        /// <summary>Dükkan adı veya görünen başlık (opsiyonel)</summary>
         [MaxLength(200)]
         public string? Name { get; set; }
 
-        /// <summary>Dükkan/ünite numarası (ör. 105, A12)</summary>
         [MaxLength(50)]
         public string? UnitNumber { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        public decimal? AreaM2 { get; set; }
+        public int CreatedByUserId { get; set; }
+        public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
 
         // Navigation
         [JsonIgnore]

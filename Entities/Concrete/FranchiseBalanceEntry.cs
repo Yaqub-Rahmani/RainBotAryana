@@ -12,7 +12,7 @@ using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    public enum BalanceDirection { In = 1, Out = 2 } // Bakiye hareketi yönü
+    public enum BalanceDirection { In = 1, Out = 2 }
 
     public class FranchiseBalanceEntry : IEntity
     {
@@ -23,10 +23,10 @@ namespace Entities.Concrete
         public Guid FranchiseOwnerId { get; set; }
 
         [Required]
-        public BalanceDirection Direction { get; set; } // In / Out
+        public BalanceDirection Direction { get; set; } 
 
         [Column(TypeName = "decimal(18,2)")]
-        public decimal Amount { get; set; } // In için +, Out için + (yön belirler)
+        public decimal Amount { get; set; } 
         public int CreatedByUserId { get; set; }
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
         public int? UpdatedByUserId { get; set; }
@@ -35,9 +35,9 @@ namespace Entities.Concrete
 
         public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
 
-        // İz bağlantıları (opsiyonel, rapor kolaylığı)
-        public Guid? CollectionId { get; set; }            // Tahsilat
-        public Guid? CollectionAllocationId { get; set; }  // Kind=Franchise satırı
+
+        public Guid? CollectionId { get; set; } 
+        public Guid? CollectionAllocationId { get; set; } 
         public Guid? ContractId { get; set; }
         public Guid? ShopId { get; set; }
 

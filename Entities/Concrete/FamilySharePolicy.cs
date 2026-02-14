@@ -13,11 +13,9 @@ namespace Entities.Concrete
     {
         [Key] public Guid Id { get; set; }
 
-        /// <summary>Ebeveyn toplam yüzdesi (örn. 8.00 = %8)</summary>
         [Column(TypeName = "decimal(5,2)")]
         public decimal ParentPercent { get; set; } = 8.00m;
 
-        /// <summary>Kalan kısım için ağırlıklar: kız=1, erkek=2 gibi</summary>
         [Column(TypeName = "decimal(6,3)")]
         public decimal FemaleWeight { get; set; } = 1.000m;
 

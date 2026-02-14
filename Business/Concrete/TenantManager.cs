@@ -30,18 +30,34 @@ namespace Business.Concrete
         private readonly IAddressDal _addrDal;
         private readonly IAccrualDal _accrualDal;
 
+        private readonly ICollectionDal _collectionDal;
+        private readonly IContractDal _contractDal;
+        private readonly IShopDal _shopDal;
+
+        private readonly IBiometricDal _biometricDal;
+
         public TenantManager(
             ITenantDal tenantDal,
             IMediaAssetDal mediaDal,
             IPhoneDal phoneDal,
             IAddressDal addrDal,
-            IAccrualDal accrualDal)
+            IAccrualDal accrualDal,
+            ICollectionDal collectionDal,
+            IContractDal contractDal,
+            IShopDal shopDal,
+            IBiometricDal biometricDal
+            )
         {
             _tenantDal = tenantDal;
             _mediaDal = mediaDal;
             _phoneDal = phoneDal;
             _addrDal = addrDal;
             _accrualDal = accrualDal;
+            _collectionDal = collectionDal;
+            _contractDal = contractDal;
+            _shopDal = shopDal;
+            _biometricDal = biometricDal;
+
         }
 
 
@@ -460,5 +476,264 @@ namespace Business.Concrete
             if (!string.IsNullOrWhiteSpace(line1)) parts.Add(line1);
             return parts.Count == 0 ? null : string.Join(" - ", parts);
         }
+
+
+
+        public IDataResult<TenantProfileDto> GetProfile(Guid id)
+        {
+            var ownerType = MediaOwnerType.Tenant;
+
+            var q =
+                from t in _tenantDal.QueryNoTracking()
+                where t.Id == id
+
+                let phonePrimary =
+                    (from p in _phoneDal.QueryNoTracking()
+                     where p.OwnerType == ownerType && p.OwnerId == t.Id
+                     orderby p.IsPrimary descending, p.Id ascending
+                     select p.Number).FirstOrDefault()
+
+                let phoneSecondary =
+                    (from p in _phoneDal.QueryNoTracking()
+                     where p.OwnerType == ownerType && p.OwnerId == t.Id
+                     orderby p.IsPrimary descending, p.Id ascending
+                     select p.Number).Skip(1).FirstOrDefault()
+
+                let addr =
+                    (from a in _addrDal.QueryNoTracking()
+                     where a.OwnerType == ownerType && a.OwnerId == t.Id
+                     orderby a.IsPrimary descending
+                     select new
+                     {
+                         Province = a.Province != null ? a.Province.Name : null,
+                         District = a.District != null ? a.District.Name : null,
+                         a.Line1
+                     }).FirstOrDefault()
+
+                let avatarUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == t.Id && m.Kind == MediaKind.Avatar
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+
+                let idFrontUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == t.Id && m.Kind == MediaKind.IdFront
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+
+                let idBackUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == t.Id && m.Kind == MediaKind.IdBack
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+
+                let fingerUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == t.Id && m.Kind == MediaKind.FingerBitmap
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+
+                let contractUrl =
+                    (from m in _mediaDal.QueryNoTracking()
+                     where m.OwnerType == ownerType && m.OwnerId == t.Id && m.Kind == MediaKind.TenantContract
+                     orderby m.IsPrimary descending, m.Id descending
+                     select m.StorageUrl).FirstOrDefault()
+
+                let debt =
+                    (from a in _accrualDal.QueryNoTracking()
+                     where a.TenantId == t.Id
+                     group a by 1 into g
+                     select g.Sum(x => (decimal?)x.OutstandingAmount) ?? 0m).FirstOrDefault()
+
+                select new TenantProfileDto
+                {
+                    Id = t.Id.ToString(),
+                    DisplayName = t.DisplayName,
+                    FatherName = t.FatherName,
+                    Gender = t.Gender,
+                    NationalId = t.NationalId,
+                    IsActive = t.IsActive,
+
+                    PhonePrimary = phonePrimary ?? "",
+                    PhoneSecondary = phoneSecondary ?? "",
+
+                    Province = addr != null ? (addr.Province ?? "") : "",
+                    District = addr != null ? (addr.District ?? "") : "",
+                    AddressLine = addr != null ? (addr.Line1 ?? "") : "",
+                    AddressFull =
+                        (addr == null) ? "" :
+                        ((addr.Province ?? "") +
+                         ((addr.Province != null && addr.District != null) ? ", " : "") +
+                         (addr.District ?? "") +
+                         (((addr.Province != null || addr.District != null) && addr.Line1 != null) ? " - " : "") +
+                         (addr.Line1 ?? "")),
+
+                    Balance = debt,
+
+                    AvatarUrl = avatarUrl ?? "",
+                    IdFrontUrl = idFrontUrl ?? "",
+                    IdBackUrl = idBackUrl ?? "",
+                    FingerBitmapUrl = fingerUrl ?? "",
+                    ContractUrl = contractUrl ?? ""
+                };
+
+            var dto = q.FirstOrDefault();
+            if (dto == null) return new ErrorDataResult<TenantProfileDto>(null, "یافت نشد.");
+
+            return new SuccessDataResult<TenantProfileDto>(dto);
+        }
+
+        public IDataResult<List<TenantContractBriefDto>> GetContracts(Guid id)
+        {
+            var list = _tenantDal.QueryNoTracking()
+                .Where(t => t.Id == id)
+                .SelectMany(t => t.Contracts)
+                .Include(c => c.Shop).ThenInclude(s => s.Market)
+                .Include(c => c.Shop).ThenInclude(s => s.Floor)
+                .OrderByDescending(c => c.StartDate)
+                .Select(c => new TenantContractBriefDto
+                {
+                    ContractId = c.Id,
+                    ShopId = c.ShopId,
+                    MarketName = c.Shop.Market.MarketName,
+                    FloorName = c.Shop.Floor.FloorName,
+                    ShopName = c.Shop.Name ?? "",
+                    UnitNumber = c.Shop.UnitNumber,
+                    StartDate = c.StartDate.ToString("yyyy-MM-dd"),
+                    EndDate = c.EndDate.ToString("yyyy-MM-dd"),
+                    Status = c.Status.ToString()
+                })
+                .ToList();
+
+            return new SuccessDataResult<List<TenantContractBriefDto>>(list);
+        }
+
+        public async Task<IResult> UpsertFingerprintAsync(Guid id, TenantFingerprintUpsertDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.TemplateBase64))
+                return new ErrorResult("TemplateBase64 zorunlu.");
+
+            var exists = await _tenantDal.QueryNoTracking().AnyAsync(x => x.Id == id);
+            if (!exists) return new ErrorResult("Kiracı یافت نشد.");
+
+            byte[] DecodeBase64(string input)
+            {
+                var s = (input ?? "").Trim();
+                var idx = s.IndexOf("base64,", StringComparison.OrdinalIgnoreCase);
+                if (idx >= 0) s = s.Substring(idx + "base64,".Length);
+                return Convert.FromBase64String(s);
+            }
+
+            var templateBytes = DecodeBase64(dto.TemplateBase64);
+
+            var actives = await _biometricDal.Query()
+                .Where(x => x.OwnerType == MediaOwnerType.Tenant
+                         && x.OwnerId == id
+                         && x.Type == BiometricType.Fingerprint
+                         && x.IsActive)
+                .ToListAsync();
+
+            foreach (var a in actives)
+            {
+                a.IsActive = false;
+                _biometricDal.Update(a);
+            }
+
+            _biometricDal.Add(new Biometric
+            {
+                Id = Guid.NewGuid(),
+                OwnerType = MediaOwnerType.Tenant,
+                OwnerId = id,
+                Type = BiometricType.Fingerprint,
+                Template = templateBytes,
+                RelatedMediaAssetId = dto.RelatedMediaAssetId,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            return new SuccessResult("اثر انگشت بروزرسانی شد.");
+        }
+
+        public async Task<IDataResult<TenantPeriodSummaryPageDto>> GetPeriodSummaries(Guid id, QueryOptions opt)
+        {
+            if (id == Guid.Empty)
+                return new ErrorDataResult<TenantPeriodSummaryPageDto>(null, "tenantId is required.");
+
+            var q = _accrualDal.QueryNoTracking()
+                .Where(a => a.TenantId == id)
+                .GroupBy(a => new
+                {
+                    a.ShopId,
+                    a.ContractId,
+                    a.Year,
+                    a.Month,
+                    MarketName = a.Shop.Market.MarketName,
+                    FloorName = a.Shop.Floor.FloorName,
+                    ShopName = a.Shop.Name,
+                    a.Shop.UnitNumber
+                })
+                .Select(g => new TenantPeriodSummaryRowDto
+                {
+                    ShopId = g.Key.ShopId,
+                    ContractId = g.Key.ContractId,
+                    Year = g.Key.Year,
+                    Month = g.Key.Month,
+                    MarketName = g.Key.MarketName,
+                    FloorName = g.Key.FloorName,
+                    ShopName = g.Key.ShopName ?? "",
+                    UnitNumber = g.Key.UnitNumber,
+
+                    TotalAccrued = g.Sum(x => x.Amount),
+                    TotalPaid = g.Sum(x => x.Amount - x.OutstandingAmount),
+                    TotalOutstanding = g.Sum(x => x.OutstandingAmount),
+                });
+
+            // ✅ QueryOptions: filters/sort/search
+            q = q.ApplyFilters(opt.Filters);
+            q = q.ApplySort(opt.Sort);
+            //q = q.ApplySorting(opt.Sort);
+
+            if (!string.IsNullOrWhiteSpace(opt.Search))
+            {
+                var s = opt.Search.Trim();
+                q = q.Where(x =>
+                    x.MarketName.Contains(s) ||
+                    x.FloorName.Contains(s) ||
+                    (x.UnitNumber != null && x.UnitNumber.Contains(s)) ||
+                    x.ShopName.Contains(s));
+            }
+
+            var summary = await q.GroupBy(_ => 1).Select(g => new
+            {
+                TotalAccrued = g.Sum(x => (decimal?)x.TotalAccrued) ?? 0m,
+                TotalPaid = g.Sum(x => (decimal?)x.TotalPaid) ?? 0m,
+                TotalOutstanding = g.Sum(x => (decimal?)x.TotalOutstanding) ?? 0m
+            }).FirstOrDefaultAsync();
+
+            var total = await q.CountAsync();
+
+            var page = await q
+                .Skip((opt.Page - 1) * opt.PageSize)
+                .Take(opt.PageSize)
+                .ToListAsync();
+
+            var dto = new TenantPeriodSummaryPageDto
+            {
+                Page = new PagedResult<TenantPeriodSummaryRowDto>
+                {
+                    Items = page,
+                    Page = opt.Page,
+                    PageSize = opt.PageSize,
+                    TotalCount = total
+                },
+                TotalAccrued = summary?.TotalAccrued ?? 0m,
+                TotalPaid = summary?.TotalPaid ?? 0m,
+                TotalOutstanding = summary?.TotalOutstanding ?? 0m
+            };
+
+            return new SuccessDataResult<TenantPeriodSummaryPageDto>(dto);
+        }
+
     }
 }

@@ -11,10 +11,10 @@ namespace Entities.Dtos
     {
         public Guid Id { get; set; }
         public string DisplayName { get; set; } = null!;
-        public string? Avatar { get; set; }            // MediaAsset.StorageUrl (Kind=Avatar, IsPrimary)
-        public string? AddressFull { get; set; }       // Province + District + Line1
-        public string? PrimaryPhone { get; set; }      // Phone.Number (IsPrimary)
-        public decimal Balance { get; set; }           // FranchiseOwnerBalance.Balance
+        public string? Avatar { get; set; }            
+        public string? AddressFull { get; set; }      
+        public string? PrimaryPhone { get; set; }      
+        public decimal Balance { get; set; }          
         public bool IsActive { get; set; }
     }
 }

@@ -16,9 +16,12 @@ namespace Business.Abstract
     {
         IDataResult<List<Contract>> GetAll(bool includeArchived = false);
         IDataResult<Contract> GetById(Guid id);
-        IDataResult<ContractDetailDto> GetDetail(Guid id);
+        IDataResult<ContractDetailDto> GetDetail(Guid contractId);
 
-        IDataResult<List<ContractListItemDto>> GetListItems();
+        //IDataResult<List<ContractListItemDto>> GetListItems();
+        public IDataResult<PagedResult<ContractListItemDto>> GetListItems(QueryOptions opt);
+
+
 
         IResult Add(ContractCreateDto dto, int userId);
         IResult Update(ContractUpdateDto dto, int userId);

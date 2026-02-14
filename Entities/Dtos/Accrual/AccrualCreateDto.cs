@@ -15,7 +15,7 @@ namespace Entities.Dtos.Accrual
         public Guid ContractId { get; set; }
         public Guid? MeterReadingId { get; set; }
 
-        public AccrualKind Kind { get; set; }
+        public AllocationKind Kind { get; set; }
         public int Year { get; set; }      // 1300–1500 (هجری شمسی)
         public int Month { get; set; }     // 1–12
 

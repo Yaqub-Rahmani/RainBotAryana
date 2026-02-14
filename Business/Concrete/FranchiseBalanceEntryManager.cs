@@ -10,12 +10,11 @@ using Core.Utilities.Results;
 using DataAccess.Abstract;
 using Entities.Concrete;
 using Entities.Dtos;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Core.Extensions;
+using System.Globalization;
+using Entities.Dtos.FranchiseOwner;
+using Entities.Dtos.FranchiseOwner.entry;
+using Core.Utilities.KabulDateTime;
 
 namespace Business.Concrete
 {
@@ -23,207 +22,184 @@ namespace Business.Concrete
     {
         private readonly IFranchiseBalanceEntryDal _entryDal;
         private readonly IFranchiseOwnerDal _ownerDal;
+        private readonly IUserDal _userDal;
+        private readonly ITimeProvider _timeProvider;
+        private readonly IMoneyEntryDal _moneyEntryDal;
 
-        public FranchiseBalanceEntryManager(IFranchiseBalanceEntryDal entryDal, IFranchiseOwnerDal ownerDal)
+        public FranchiseBalanceEntryManager(IFranchiseBalanceEntryDal entryDal, IFranchiseOwnerDal ownerDal, IUserDal userDal, IMoneyEntryDal moneyEntryDal, ITimeProvider timeProvider)
         {
             _entryDal = entryDal;
             _ownerDal = ownerDal;
+            _userDal = userDal;
+            _timeProvider = timeProvider;
+            _moneyEntryDal = moneyEntryDal;
         }
 
         // ------ Okumalar ------
 
-        [CacheAspect(10)]
-        public IDataResult<List<FranchiseBalanceEntry>> GetAll(Guid? ownerId = null)
-        {
-            var q = _entryDal.QueryNoTracking();
-            if (ownerId.HasValue && ownerId.Value != Guid.Empty)
-                q = q.Where(x => x.FranchiseOwnerId == ownerId.Value);
-
-            return new SuccessDataResult<List<FranchiseBalanceEntry>>(
-                q.OrderByDescending(x => x.OccurredAtUtc).ToList()
-            );
-        }
-
-        [CacheAspect(10)]
-        public IDataResult<FranchiseBalanceEntry> GetById(Guid id)
-        {
-            var e = _entryDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
-            return e == null ? new ErrorDataResult<FranchiseBalanceEntry>(null, "یافت نشد.")
-                             : new SuccessDataResult<FranchiseBalanceEntry>(e);
-        }
-
-        [CacheAspect(10)]
-        public IDataResult<PagedResult<FranchiseBalanceEntryDetailDto>> GetDetails(QueryOptions opt, Guid? ownerId = null)
+        public IDataResult<PagedWithSummaryDto<oldFranchiseBalanceEntryDetailDto>> GetDetails(QueryOptions opt, Guid? ownerId = null)
         {
             opt ??= new QueryOptions();
-            var q = _entryDal.QueryNoTracking();
+
+            var baseQ = _entryDal.QueryNoTracking();
 
             if (ownerId.HasValue && ownerId.Value != Guid.Empty)
-                q = q.Where(x => x.FranchiseOwnerId == ownerId.Value);
+                baseQ = baseQ.Where(x => x.FranchiseOwnerId == ownerId.Value);
 
-            // Filters: periodYear, periodMonth, shopId, contractId, direction, from/to, etc.
-            q = q.ApplyFilters(opt.Filters);
+            baseQ = baseQ.ApplyIncludes(opt.Includes);
 
-            if (!string.IsNullOrWhiteSpace(opt.Search))
-            {
-                var key = opt.Search.Trim();
-                q = q.Where(x => (x.Notes ?? "").Contains(key));
-            }
+            var searchFields = opt.ExtractSearchFields(out var remainingFilters);
 
-            q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(x => x.OccurredAtUtc);
+            // Entity filtreleri (bilinenler) + DTO'ya ertelenenler
+            baseQ = baseQ.ApplyFilters(remainingFilters, out var deferredEntityFilters);
 
             var owners = _ownerDal.QueryNoTracking();
+            var users = _userDal.QueryNoTracking();
+
             var projected =
-                from e in q
+                from e in baseQ
                 join o in owners on e.FranchiseOwnerId equals o.Id
-                select new FranchiseBalanceEntryDetailDto
+                join u in users on e.CreatedByUserId equals u.Id into uj
+                from u in uj.DefaultIfEmpty()
+                select new oldFranchiseBalanceEntryDetailDto
                 {
                     Id = e.Id,
+
                     FranchiseOwnerId = e.FranchiseOwnerId,
-                    FranchiseOwnerName = o.DisplayName, // Name kullanıyorsan burayı değiştir
+                    FranchiseOwnerName = o.DisplayName,
+
+                    CreatedByUserId = e.CreatedByUserId,
+                    CreatedByUserName = u != null ? (u.FirstName ?? "") : "",
+                    CreatedAtUtc = DateOnly.FromDateTime(e.CreatedAtUtc),
+
                     Direction = e.Direction.ToString(),
+                    ReferenceNo = (e.PaymentReference ?? ""),
                     Amount = e.Amount,
+                    paymentMethod = e.PaymentMethod,
+
                     OccurredAtUtc = e.OccurredAtUtc,
+
+                    PeriodYear = e.PeriodYear,
+                    PeriodMonth = e.PeriodMonth,
+
                     CollectionId = e.CollectionId,
                     CollectionAllocationId = e.CollectionAllocationId,
                     ContractId = e.ContractId,
                     ShopId = e.ShopId,
-                    PeriodYear = e.PeriodYear,
-                    PeriodMonth = e.PeriodMonth,
+
                     Notes = e.Notes
                 };
 
+            // DTO tarafına ertelenen filtreler (OwnerName / CreatedByUserName vb.)
+            projected = projected.ApplyFilters(deferredEntityFilters);
+
+            // Search (OR contains)
+            if (!string.IsNullOrWhiteSpace(opt.Search))
+                projected = projected.ApplySearch(opt.Search, searchFields);
+
+            // ✅ Summary: filtre+search uygulanmış query'den, paging/sort öncesi
+            var summary = projected
+                .GroupBy(_ => 1)
+                .Select(g => new BalanceSummaryDto
+                {
+                    TotalIn = g.Where(x => x.Direction == "In").Select(x => (decimal?)x.Amount).Sum() ?? 0m,
+                    TotalOut = g.Where(x => x.Direction == "Out").Select(x => (decimal?)x.Amount).Sum() ?? 0m
+                })
+                .FirstOrDefault() ?? new BalanceSummaryDto();
+
+            // Count
             var total = projected.Count();
+
+            // Sort (mevcut davranış aynen)
+            projected = projected.ApplySort(opt.Sort);
+            if (!projected.Expression.ToString()!.Contains("OrderBy"))
+                projected = projected.OrderByDescending(x => x.OccurredAtUtc);
+
+            // Paging + materialize
             var items = projected.ApplyPaging(opt.Page, opt.PageSize).ToList();
 
-            return new SuccessDataResult<PagedResult<FranchiseBalanceEntryDetailDto>>(
-                new PagedResult<FranchiseBalanceEntryDetailDto>
+            // Post compute
+            FillComputedFields(items);
+
+            return new SuccessDataResult<PagedWithSummaryDto<oldFranchiseBalanceEntryDetailDto>>(
+                new PagedWithSummaryDto<oldFranchiseBalanceEntryDetailDto>
                 {
-                    Items = items,
-                    Page = opt.Page,
-                    PageSize = opt.PageSize,
-                    TotalCount = total
-                });
+                    Page = new PagedResult<oldFranchiseBalanceEntryDetailDto>
+                    {
+                        Items = items,
+                        Page = opt.Page,
+                        PageSize = opt.PageSize,
+                        TotalCount = total
+                    },
+                    Summary = summary
+                }
+            );
         }
 
-        [CacheAspect(10)]
-        public IDataResult<FranchiseBalanceEntryDetailDto> GetDetailById(Guid id)
+        private static readonly CultureInfo FaCulture = new("fa-IR");
+
+        private static void FillComputedFields(List<oldFranchiseBalanceEntryDetailDto> items)
         {
-            var dto = (from e in _entryDal.QueryNoTracking().Where(x => x.Id == id)
-                       join o in _ownerDal.QueryNoTracking() on e.FranchiseOwnerId equals o.Id
-                       select new FranchiseBalanceEntryDetailDto
-                       {
-                           Id = e.Id,
-                           FranchiseOwnerId = e.FranchiseOwnerId,
-                           FranchiseOwnerName = o.DisplayName,
-                           Direction = e.Direction.ToString(),
-                           Amount = e.Amount,
-                           OccurredAtUtc = e.OccurredAtUtc,
-                           CollectionId = e.CollectionId,
-                           CollectionAllocationId = e.CollectionAllocationId,
-                           ContractId = e.ContractId,
-                           ShopId = e.ShopId,
-                           PeriodYear = e.PeriodYear,
-                           PeriodMonth = e.PeriodMonth,
-                           Notes = e.Notes
-                       }).FirstOrDefault();
+            foreach (var x in items)
+            {
+                // 12-hour time (e.g., 03:25 PM) - English digits
+                //x.OccurredTime = x.OccurredAtUtc.ToString("hh:mm tt", CultureInfo.InvariantCulture);
+                var en = CultureInfo.GetCultureInfo("en-US");
+                x.OccurredTime = x.OccurredAtUtc.ToString("hh:mm tt", en); // 03:25 PM
 
-            return dto == null ? new ErrorDataResult<FranchiseBalanceEntryDetailDto>(null, "یافت نشد.")
-                               : new SuccessDataResult<FranchiseBalanceEntryDetailDto>(dto);
+
+
+                // Day name (فارسی)
+                x.DayName = x.OccurredAtUtc.ToString("dddd", FaCulture);
+
+                // Direction label (فارسی)
+                x.DirectionLabel = string.Equals(x.Direction, "In", StringComparison.OrdinalIgnoreCase)
+                    ? "دریافت (ورود به حساب)"
+                    : string.Equals(x.Direction, "Out", StringComparison.OrdinalIgnoreCase)
+                        ? "پرداخت (خروج از حساب)"
+                        : x.Direction;
+
+                // PeriodLabel "1404-04"
+                x.PeriodLabel = (x.PeriodYear.HasValue && x.PeriodMonth.HasValue)
+                    ? $"{x.PeriodYear.Value}-{x.PeriodMonth.Value:00}"
+                    : null;
+            }
         }
 
-        // ------ Özet / Rapor ------
-
-        [CacheAspect(5)]
-        public IDataResult<List<FranchiseBalanceSummaryDto>> GetSummary(Guid? ownerId = null, DateTime? fromUtc = null, DateTime? toUtc = null)
-        {
-            var q = _entryDal.QueryNoTracking();
-
-            if (ownerId.HasValue && ownerId.Value != Guid.Empty)
-                q = q.Where(x => x.FranchiseOwnerId == ownerId.Value);
-
-            if (fromUtc.HasValue) q = q.Where(x => x.OccurredAtUtc >= fromUtc.Value);
-            if (toUtc.HasValue) q = q.Where(x => x.OccurredAtUtc <= toUtc.Value);
-
-            var grouped = from e in q
-                          group e by e.FranchiseOwnerId into g
-                          select new
-                          {
-                              FranchiseOwnerId = g.Key,
-                              TotalIn = g.Where(x => x.Direction == BalanceDirection.In).Sum(x => (decimal?)x.Amount) ?? 0m,
-                              TotalOut = g.Where(x => x.Direction == BalanceDirection.Out).Sum(x => (decimal?)x.Amount) ?? 0m
-                          };
-
-            var owners = _ownerDal.QueryNoTracking().ToList();
-            var list = grouped.AsEnumerable()
-                .Select(x => new FranchiseBalanceSummaryDto
-                {
-                    FranchiseOwnerId = x.FranchiseOwnerId,
-                    FranchiseOwnerName = owners.FirstOrDefault(o => o.Id == x.FranchiseOwnerId)?.DisplayName ?? "",
-                    TotalIn = x.TotalIn,
-                    TotalOut = x.TotalOut
-                })
-                .OrderByDescending(x => x.Balance)
-                .ToList();
-
-            return new SuccessDataResult<List<FranchiseBalanceSummaryDto>>(list);
-        }
-
-        // ------ Yazmalar ------
 
         [SecuredOperation("franchisebalance.write,admin")]
         [ValidationAspect(typeof(FranchiseBalanceEntryValidator))]
         [TransactionScopeAspect]
         [CacheRemoveAspect("IFranchiseBalanceEntryService.Get")]
-        public IResult Add(FranchiseBalanceEntry entry)
+
+        public IResult Add(FranchiseBalanceEntryCreateDto dto, int userId)
         {
-            if (_ownerDal.Get(x => x.Id == entry.FranchiseOwnerId) == null)
+            if (_ownerDal.Get(x => x.Id == dto.FranchiseOwnerId) == null)
                 return new ErrorResult("صاحب امتیاز یافت نشد.");
+
+            if (dto.MoneyEntryId == null)
+                return new ErrorResult("MoneyEntryId الزامی است.");
+
+            if (_moneyEntryDal.Get(x => x.Id == dto.MoneyEntryId) == null)
+                return new ErrorResult("MoneyEntry یافت نشد.");
+
+            var entry = new FranchiseBalanceEntry
+            {
+                Id = dto.Id,
+                Direction = dto.Direction,
+                Amount = Math.Round(dto.Amount, 2, MidpointRounding.AwayFromZero),
+                OccurredAtUtc = DateTime.SpecifyKind(dto.OccurredAtUtc, DateTimeKind.Utc),
+                Notes = dto.Notes,
+                PaymentMethod = dto.PaymentMethod,
+                PaymentReference = dto.PaymentReference,
+                CreatedByUserId = userId,
+                IsActive = true,
+                MoneyEntryId = dto.MoneyEntryId,
+                FranchiseOwnerId = dto.FranchiseOwnerId,
+            };
 
             _entryDal.Add(entry);
             return new SuccessResult("ورودی تراز امتیاز ثبت شد.");
-        }
-
-        [SecuredOperation("franchisebalance.write,admin")]
-        [ValidationAspect(typeof(FranchiseBalanceEntryValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IFranchiseBalanceEntryService.Get")]
-        public IResult Update(FranchiseBalanceEntry entry)
-        {
-            var current = _entryDal.Get(x => x.Id == entry.Id);
-            if (current == null) return new ErrorResult("یافت نشد.");
-
-            if (_ownerDal.Get(x => x.Id == entry.FranchiseOwnerId) == null)
-                return new ErrorResult("صاحب امتیاز یافت نشد.");
-
-            current.FranchiseOwnerId = entry.FranchiseOwnerId;
-            current.Direction = entry.Direction;
-            current.Amount = entry.Amount;
-            current.OccurredAtUtc = entry.OccurredAtUtc;
-            current.CollectionId = entry.CollectionId;
-            current.CollectionAllocationId = entry.CollectionAllocationId;
-            current.ContractId = entry.ContractId;
-            current.ShopId = entry.ShopId;
-            current.PeriodYear = entry.PeriodYear;
-            current.PeriodMonth = entry.PeriodMonth;
-            current.Notes = entry.Notes;
-
-            _entryDal.Update(current);
-            return new SuccessResult("بروزرسانی شد.");
-        }
-
-        [SecuredOperation("franchisebalance.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IFranchiseBalanceEntryService.Get")]
-        public IResult Delete(Guid id)
-        {
-            var e = _entryDal.Get(x => x.Id == id);
-            if (e == null) return new ErrorResult("یافت نشد.");
-
-            _entryDal.Delete(e);
-            return new SuccessResult("حذف شد.");
         }
     }
 }

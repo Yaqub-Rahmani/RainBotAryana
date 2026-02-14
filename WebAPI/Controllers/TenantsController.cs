@@ -1,6 +1,7 @@
 ﻿using Business.Abstract;
 using Core.Utilities.Query;
 using Entities.Concrete;
+using Entities.Dtos.tenant;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -96,6 +97,38 @@ namespace WebAPI.Controllers
         {
             var result = _service.GetAllTenantView(active);
             return Ok(result.Data);
+        }
+
+        [HttpGet("{id:guid}/profile")]
+        [Authorize]
+        public IActionResult GetProfile(Guid id)
+        {
+            var r = _service.GetProfile(id);
+            return r.Success ? Ok(r.Data) : NotFound(r.Message);
+        }
+
+        [HttpGet("{id:guid}/contracts")]
+        [Authorize]
+        public IActionResult GetContracts(Guid id)
+        {
+            var r = _service.GetContracts(id);
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
+        }
+
+        [HttpGet("{id:guid}/period-summaries")]
+        [Authorize]
+        public async Task<IActionResult> GetPeriodSummaries(Guid id, [FromQuery] TenantPeriodSummaryQueryOptions opt)
+        {
+            var r = await _service.GetPeriodSummaries(id, opt);
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
+        }
+
+        [HttpPost("{id:guid}/fingerprint")]
+        [Authorize]
+        public async Task<IActionResult> UpsertFingerprint(Guid id, [FromBody] TenantFingerprintUpsertDto dto)
+        {
+            var r = await _service.UpsertFingerprintAsync(id, dto);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
     }
 }

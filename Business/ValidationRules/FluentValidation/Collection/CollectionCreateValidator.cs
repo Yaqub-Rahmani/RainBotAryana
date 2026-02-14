@@ -12,35 +12,32 @@ namespace Business.ValidationRules.FluentValidation.Collection
     {
         public CollectionCreateValidator()
         {
-            RuleFor(x => x.TenantId).NotEmpty().WithMessage("انتخاب مستأجر الزامی است.");
-            RuleFor(x => x.ShopId).NotEmpty().WithMessage("انتخاب فروشگاه الزامی است.");
-            RuleFor(x => x.ContractId).NotEmpty().WithMessage("انتخاب قرارداد الزامی است.");
-            RuleFor(x => x.AmountReceived).GreaterThan(0).WithMessage("مبلغ دریافت‌شده باید بزرگتر از 0 باشد.");
-            RuleFor(x => x.Method).IsInEnum().WithMessage("روش پرداخت نامعتبر است.");
+            RuleFor(x => x.TenantId)
+                .NotEqual(Guid.Empty).WithMessage("کرایه‌دار نامعتبر است.");
 
-            When(x => x.TargetYear.HasValue, () =>
-            {
-                RuleFor(x => x.TargetYear!.Value).InclusiveBetween(1300, 1500)
-                    .WithMessage("سال هدف باید بین 1300 و 1500 باشد.");
-            });
+            RuleFor(x => x.ShopId)
+                .NotEqual(Guid.Empty).WithMessage("دکان نامعتبر است.");
 
-            When(x => x.TargetMonth.HasValue, () =>
-            {
-                RuleFor(x => x.TargetMonth!.Value).InclusiveBetween(1, 12)
-                    .WithMessage("ماه هدف باید بین 1 و 12 باشد.");
-            });
+            RuleFor(x => x.ContractId)
+                .NotEqual(Guid.Empty).WithMessage("قرارداد نامعتبر است.");
 
-            RuleFor(x => x.ReferenceNo).MaximumLength(100).WithMessage("شناسه ارجاع حداکثر 100 کاراکتر است.");
-            RuleFor(x => x.Notes).MaximumLength(500).WithMessage("توضیحات حداکثر 500 کاراکتر است.");
+            RuleFor(x => x.AmountReceived)
+                .GreaterThan(0).WithMessage("مبلغ باید بزرگتر از صفر باشد.");
+
+            RuleFor(x => x.Method)
+                .IsInEnum().WithMessage("طریقه پرداخت نامعتبر است.");
+
+            RuleFor(x => x.MoneyAccountId)
+                .NotEqual(Guid.Empty).WithMessage("حساب دریافت نامعتبر است.");
         }
     }
 
-    public class CollectionUpdateValidator : AbstractValidator<CollectionUpdateDto>
+    public class CollectionApproveValidator : AbstractValidator<CollectionApproveDto>
     {
-        public CollectionUpdateValidator()
+        public CollectionApproveValidator()
         {
-            Include(new CollectionCreateValidator());
-            RuleFor(x => x.Id).NotEmpty().WithMessage("شناسه نامعتبر است.");
+            RuleFor(x => x.Id)
+                .NotEqual(Guid.Empty).WithMessage("شناسه پرداخت نامعتبر است.");
         }
     }
 }

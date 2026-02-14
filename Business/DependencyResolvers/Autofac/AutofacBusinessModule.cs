@@ -7,21 +7,95 @@ using Castle.DynamicProxy;
 using Core.Utilities.Files;
 using Core.Utilities.Interceptors;
 using Core.Utilities.KabulDateTime;
+using Core.Utilities.Pdf;
+using Core.Utilities.Pdf.Abstractions;
+using Core.Utilities.Pdf.Contracts;
+using Core.Utilities.Pdf.Engine;
+using Core.Utilities.Pdf.Resources;
+using Core.Utilities.Pdf.Templates;
 using Core.Utilities.Security.Jwt;
 using DataAccess.Abstract;
 using DataAccess.Concrete.EntityFramework;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 namespace Business.DependencyResolvers.Autofac
 {
     public class AutofacBusinessModule : Module
     {
         protected override void Load(ContainerBuilder builder)
         {
+            // PDF altyapısı
+            builder.RegisterType<PdfResourceLoader>().SingleInstance();
+            builder.RegisterType<QuestPdfFontRegistry>().SingleInstance();
+            builder.RegisterType<QuestPdfReportEngine>().As<IPdfReportEngine>().InstancePerLifetimeScope();
+
+            builder.Register(c =>
+            {
+                var cfg = c.Resolve<IConfiguration>();
+                var env = c.Resolve<IHostEnvironment>();
+
+                // WebAPI: wwwroot/pdf
+                var relRoot = cfg["PdfAssets:RootPath"] ?? Path.Combine("wwwroot", "pdf");
+                var root = Path.GetFullPath(Path.Combine(env.ContentRootPath, relRoot));
+
+                return new PdfAssetsOptions
+                {
+                    RootPath = root,
+                    LogoFileName = cfg["PdfAssets:LogoFileName"] ?? "AryanaLogo.png",
+                    DefaultFontFileName = cfg["PdfAssets:DefaultFontFileName"] ?? "Vazirmatn-Regular.ttf"
+                };
+            }).SingleInstance();
+
+
+
+            builder.RegisterType<ReportManager>().As<IReportService>().InstancePerLifetimeScope();
+
+            // Template
+            builder.RegisterType<PaymentReceiptA6Template>()
+                .As<IReportTemplate<PaymentReceiptA6Model>>()
+                .InstancePerLifetimeScope();
+
+            // Engine
+            builder.RegisterType<QuestPdfReportEngine>().As<IPdfReportEngine>().InstancePerLifetimeScope();
+
+            // Resources / font registry
+            builder.RegisterType<PdfResourceLoader>().SingleInstance();
+            builder.RegisterType<QuestPdfFontRegistry>().SingleInstance();
+
+
+            builder.RegisterType<ContractDebtStatusA6Template>()
+                    .As<IReportTemplate<ContractDebtStatusA6Model>>()
+                    .InstancePerLifetimeScope();
+
+            builder.RegisterType<ContractPeriodStatementA6Template>()
+                    .As<IReportTemplate<ContractPeriodStatementA6Model>>()
+                    .InstancePerLifetimeScope();
+
+            
+            builder.RegisterType<DashboardManager>().As<IDashboardService>().SingleInstance();
+
+            builder.RegisterType<EfEmployeeDal>().As<IEmployeeDal>().InstancePerLifetimeScope();
+            builder.RegisterType<EfEmployeeWorkInfoDal>().As<IEmployeeWorkInfoDal>().InstancePerLifetimeScope();
+            builder.RegisterType<EmployeeManager>().As<IEmployeeService>().InstancePerLifetimeScope();
+
+            builder.RegisterType<ExpenseManager>().As<IExpenseService>().InstancePerLifetimeScope();
+            builder.RegisterType<EfExpenseDal>().As<IExpenseDal>().InstancePerLifetimeScope();
+
+            builder.RegisterType<EfEmployeeTransactionDal>().As<IEmployeeTransactionDal>().InstancePerLifetimeScope();
+            builder.RegisterType<EmployeeTransactionManager>().As<IEmployeeTransactionService>().InstancePerLifetimeScope();
+
+            builder.RegisterType<EfAdminUserDal>().As<IAdminUserDal>().InstancePerLifetimeScope();
+            builder.RegisterType<AdminUserManager>().As<IAdminUserService>().InstancePerLifetimeScope();
+
+
+            builder.RegisterType<EfDollarRateDal>().As<IDollarRateDal>().InstancePerLifetimeScope();
+            builder.RegisterType<DollarRateManager>().As<IDollarRateService>().InstancePerLifetimeScope();
+
+            builder.RegisterType<EfMoneyAccountDal>().As<IMoneyAccountDal>().InstancePerLifetimeScope();
+            builder.RegisterType<MoneyAccountManager>().As<IMoneyAccountService>().InstancePerLifetimeScope();
+
+            builder.RegisterType<EfMoneyEntryDal>().As<IMoneyEntryDal>().InstancePerLifetimeScope();
+            builder.RegisterType<MoneyEntryManager>().As<IMoneyEntryService>().InstancePerLifetimeScope();
 
             builder.RegisterType<FingerprintManager>().As<IFingerprintService>().InstancePerLifetimeScope();
 
@@ -42,6 +116,12 @@ namespace Business.DependencyResolvers.Autofac
             // 🔹 Genel dosya yükleme (FormData) servisi
             builder.RegisterType<FileStorageManager>()
                    .As<IFileStorageService>()
+                   .InstancePerLifetimeScope();
+
+
+            // 🔹 payment kaydetme servisi
+            builder.RegisterType<PaymentOutflowManager>()
+                   .As<IPaymentOutflowService>()
                    .InstancePerLifetimeScope();
 
 

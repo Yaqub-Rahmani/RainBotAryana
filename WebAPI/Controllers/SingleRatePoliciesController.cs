@@ -1,81 +1,86 @@
 ﻿using Business.Abstract;
 using Core.Utilities.Query;
 using Entities.Concrete;
+using Entities.Dtos.SingleRatePolicy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace WebAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SingleRatePoliciesController : ControllerBase
+    public class SingleRatePolicyController : ControllerBase
     {
         private readonly ISingleRatePolicyService _service;
-        public SingleRatePoliciesController(ISingleRatePolicyService service) { _service = service; }
 
-        // Reads
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult GetAll([FromQuery] SingleRateType? type)
-            => Ok(_service.GetAll(type).Data);
+        public SingleRatePolicyController(ISingleRatePolicyService service)
+        {
+            _service = service;
+        }
 
-        [HttpGet("{id:guid}")]
-        [AllowAnonymous]
+        [HttpGet, Authorize]
+        public IActionResult GetAll()
+        {
+            var r = _service.GetAll();
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
+        }
+
+        [HttpGet("{id:guid}"), Authorize]
         public IActionResult Get(Guid id)
         {
             var r = _service.GetById(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("details")]
-        [AllowAnonymous]
-        public IActionResult GetDetails([FromQuery] QueryOptions opt, [FromQuery] SingleRateType? type)
+        [HttpGet("by-type/{type:int}"), Authorize]
+        public IActionResult GetByType(int type)
         {
-            var r = _service.GetDetails(opt, type);
+            if (!Enum.IsDefined(typeof(SingleRateType), type))
+                return BadRequest("نوع نامعتبر است.");
+
+            var r = _service.GetByType((SingleRateType)type);
             return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
 
-        [HttpGet("active")]
-        [AllowAnonymous]
-        public IActionResult GetActive([FromQuery] SingleRateType type, [FromQuery] DateOnly on)
+        [HttpGet("current/{type:int}"), AllowAnonymous]
+        public IActionResult GetCurrent(int type, [FromQuery] DateTime? asOfUtc = null)
         {
-            var r = _service.GetActive(type, on);
+            if (!Enum.IsDefined(typeof(SingleRateType), type))
+                return BadRequest("نوع نامعتبر است.");
+
+            var r = _service.GetCurrentRate((SingleRateType)type, asOfUtc);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        // Writes
-        [HttpPost]
-        [Authorize]
-        public IActionResult Add([FromBody] SingleRatePolicy dto)
+        [HttpPost, Authorize]
+        public IActionResult Add([FromBody] SingleRatePolicyCreateDto dto)
         {
-            var r = _service.Add(dto);
-            return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
-        }
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
 
-        [HttpPut("{id:guid}")]
-        [Authorize]
-        public IActionResult Update(Guid id, [FromBody] SingleRatePolicy dto)
-        {
-            if (id != dto.Id) return BadRequest("Id mismatch.");
-            var r = _service.Update(dto);
+            var r = _service.Add(dto, userId);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpDelete("{id:guid}")]
-        [Authorize]
+        [HttpPut("{id:guid}"), Authorize]
+        public IActionResult Update(Guid id, [FromBody] SingleRatePolicyUpdateDto dto)
+        {
+            if (id != dto.Id)
+                return BadRequest("شناسه با مدل هم‌خوانی ندارد.");
+
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var r = _service.Update(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+        }
+
+        [HttpDelete("{id:guid}"), Authorize]
         public IActionResult Delete(Guid id)
         {
             var r = _service.Delete(id);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
-        }
-
-        // Simulate
-        [HttpGet("simulate")]
-        [AllowAnonymous]
-        public IActionResult Simulate([FromQuery] SingleRateType type, [FromQuery] decimal baseAmount, [FromQuery] DateOnly? on)
-        {
-            var r = _service.Simulate(type, baseAmount, on);
-            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
     }
 }

@@ -3,6 +3,8 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.FamilyMember;
+using Entities.Dtos.FranchiseOwner;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,16 +15,15 @@ namespace Business.Abstract
 {
     public interface IFamilyBalanceEntryService
     {
-        // Okumalar
         IDataResult<List<FamilyBalanceEntry>> GetAll();
         IDataResult<FamilyBalanceEntry> GetById(Guid id);
-        IDataResult<PagedResult<FamilyBalanceEntryDetailDto>> GetDetails(QueryOptions opt, Guid? familyMemberId = null);
-        IDataResult<FamilyBalanceEntryDetailDto> GetDetailById(Guid id);
+        IDataResult<Entities.Dtos.FamilyMember.FamilyBalanceEntryDetailDto> GetDetailById(Guid id);
 
-        // Özet / rapor
+        // ✅ NEW (Controller bunu çağırıyor)        
+        IDataResult<PagedWithSummaryDto<FamilyBalanceEntryDetailDto>> GetDetails(QueryOptions opt, Guid? ownerId = null);
+
         IDataResult<List<FamilyBalanceSummaryDto>> GetSummary(Guid? familyMemberId = null, DateTime? fromUtc = null, DateTime? toUtc = null);
 
-        // Yazmalar
         IResult Add(FamilyBalanceEntry entry);
         IResult Update(FamilyBalanceEntry entry);
         IResult Delete(Guid id);

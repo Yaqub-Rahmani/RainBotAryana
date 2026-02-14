@@ -10,27 +10,27 @@ namespace WebAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class CollectionsController : ControllerBase
+    public class CollectionController : ControllerBase
     {
         private readonly ICollectionService _service;
-        public CollectionsController(ICollectionService service) => _service = service;
 
-        [HttpGet, AllowAnonymous]
-        public IActionResult GetAll([FromQuery] Guid? tenantId, [FromQuery] Guid? shopId, [FromQuery] DateTime? fromUtc, [FromQuery] DateTime? toUtc)
-            => Ok(_service.GetAll(tenantId, shopId, fromUtc, toUtc).Data);
+        public CollectionController(ICollectionService service)
+        {
+            _service = service;
+        }
 
-        [HttpGet("{id:guid}"), AllowAnonymous]
+        [HttpGet("{id:guid}"), Authorize]
         public IActionResult Get(Guid id)
         {
             var r = _service.GetById(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("{id:guid}/detail"), AllowAnonymous]
-        public IActionResult Detail(Guid id)
+        [HttpGet("by-tenant/{tenantId:guid}"), Authorize]
+        public IActionResult GetByTenant(Guid tenantId)
         {
-            var r = _service.GetDetail(id);
-            return r.Success ? Ok(r.Data) : NotFound(r.Message);
+            var r = _service.GetByTenant(tenantId);
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
 
         [HttpPost, Authorize]
@@ -43,22 +43,28 @@ namespace WebAPI.Controllers
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpPut("{id:guid}"), Authorize]
-        public IActionResult Update(Guid id, [FromBody] CollectionUpdateDto dto)
+        [HttpPost("approve"), Authorize]
+        public IActionResult Approve([FromBody] CollectionApproveDto dto)
         {
-            if (id != dto.Id) return BadRequest("شناسه نامعتبر است.");
             if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
                 return Unauthorized("کاربر نامعتبر است.");
 
-            var r = _service.Update(dto, userId);
+            var r = _service.Approve(dto, userId);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpDelete("{id:guid}"), Authorize]
-        public IActionResult Delete(Guid id)
+        [HttpPost("contract-debt-payment")]
+        [Authorize]
+        public IActionResult AddContractDebtPayment([FromBody] ContractDebtPaymentRequestDto dto)
         {
-            var r = _service.Delete(id);
-            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var result = _service.AddContractDebtPayment(dto, userId);
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
         }
     }
 }

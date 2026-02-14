@@ -5,17 +5,18 @@ using Core.Aspects.Autofac.Caching;
 using Core.Aspects.Autofac.Transaction;
 using Core.Aspects.Autofac.Validation;
 using Core.Extensions;
+using Core.Utilities.KabulDateTime;
 using Core.Utilities.Paging;
 using Core.Utilities.Query;
 using Core.Utilities.Results;
 using DataAccess.Abstract;
+using DataAccess.Concrete.EntityFramework;
 using Entities.Concrete;
 using Entities.Dtos;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Entities.Dtos.FamilyMember;
+using Entities.Dtos.FranchiseOwner;
+using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace Business.Concrete
 {
@@ -23,14 +24,19 @@ namespace Business.Concrete
     {
         private readonly IFamilyBalanceEntryDal _entryDal;
         private readonly IFamilyMemberDal _memberDal;
-
-        public FamilyBalanceEntryManager(IFamilyBalanceEntryDal entryDal, IFamilyMemberDal memberDal)
+        private readonly ITimeProvider _time;
+        private readonly IUserDal _userDal;
+        public FamilyBalanceEntryManager(
+            IFamilyBalanceEntryDal entryDal,
+            IFamilyMemberDal memberDal,
+            ITimeProvider time,
+            IUserDal userDal)
         {
             _entryDal = entryDal;
             _memberDal = memberDal;
+            _time = time;
+            _userDal = userDal;
         }
-
-        // ------ Okumalar ------
 
         [CacheAspect(10)]
         public IDataResult<List<FamilyBalanceEntry>> GetAll()
@@ -46,71 +52,21 @@ namespace Business.Concrete
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<FamilyBalanceEntryDetailDto>> GetDetails(QueryOptions opt, Guid? familyMemberId = null)
-        {
-            opt ??= new QueryOptions();
-            var q = _entryDal.QueryNoTracking();
-
-            if (familyMemberId.HasValue && familyMemberId.Value != Guid.Empty)
-                q = q.Where(x => x.FamilyMemberId == familyMemberId.Value);
-
-            // Tarih aralığı filtreleri QueryOptions.Filters ile de verilebilir: "from=2025-01-01"
-            q = q.ApplyFilters(opt.Filters);
-
-            if (!string.IsNullOrWhiteSpace(opt.Search))
-            {
-                var key = opt.Search.Trim();
-                q = q.Where(x => (x.Notes ?? "").Contains(key));
-            }
-
-            q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"))
-                q = q.OrderByDescending(x => x.OccurredAtUtc);
-
-            var projected =
-                from e in q
-                join m in _memberDal.QueryNoTracking() on e.FamilyMemberId equals m.Id
-                select new FamilyBalanceEntryDetailDto
-                {
-                    Id = e.Id,
-                    FamilyMemberId = e.FamilyMemberId,
-                    FamilyMemberName = m.DisplayName,
-                    Direction = e.Direction.ToString(),
-                    Amount = e.Amount,
-                    OccurredAtUtc = e.OccurredAtUtc,
-                    FamilyPayoutId = e.FamilyPayoutId,
-                    OwnerDistributionId = e.OwnerDistributionId,
-                    CollectionId = e.CollectionId,
-                    ContractId = e.ContractId,
-                    Notes = e.Notes
-                };
-
-            var total = projected.Count();
-            var items = projected.ApplyPaging(opt.Page, opt.PageSize).ToList();
-
-            return new SuccessDataResult<PagedResult<FamilyBalanceEntryDetailDto>>(
-                new PagedResult<FamilyBalanceEntryDetailDto>
-                {
-                    Items = items,
-                    Page = opt.Page,
-                    PageSize = opt.PageSize,
-                    TotalCount = total
-                });
-        }
-
-        [CacheAspect(10)]
         public IDataResult<FamilyBalanceEntryDetailDto> GetDetailById(Guid id)
         {
             var dto = (from e in _entryDal.QueryNoTracking().Where(x => x.Id == id)
                        join m in _memberDal.QueryNoTracking() on e.FamilyMemberId equals m.Id
-                       select new FamilyBalanceEntryDetailDto
+                       select new Entities.Dtos.FamilyMember.FamilyBalanceEntryDetailDto
                        {
                            Id = e.Id,
                            FamilyMemberId = e.FamilyMemberId,
                            FamilyMemberName = m.DisplayName,
                            Direction = e.Direction.ToString(),
+                           DirectionLabel = e.Direction == BalanceDirection.In ? "دریافت (ورود)" : "پرداخت (خروج)",
                            Amount = e.Amount,
                            OccurredAtUtc = e.OccurredAtUtc,
+                           OccurredTime = _time.FormatTimeAmPm(e.OccurredAtUtc),
+                           DayName = ToDariDayName(TimeZoneInfo.ConvertTimeFromUtc(e.OccurredAtUtc, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kabul")).DayOfWeek),
                            FamilyPayoutId = e.FamilyPayoutId,
                            OwnerDistributionId = e.OwnerDistributionId,
                            CollectionId = e.CollectionId,
@@ -118,11 +74,10 @@ namespace Business.Concrete
                            Notes = e.Notes
                        }).FirstOrDefault();
 
-            return dto == null ? new ErrorDataResult<FamilyBalanceEntryDetailDto>(null, "یافت نشد.")
-                               : new SuccessDataResult<FamilyBalanceEntryDetailDto>(dto);
+            return dto == null
+                ? new ErrorDataResult<Entities.Dtos.FamilyMember.FamilyBalanceEntryDetailDto>(null, "یافت نشد.")
+                : new SuccessDataResult<Entities.Dtos.FamilyMember.FamilyBalanceEntryDetailDto>(dto);
         }
-
-        // ------ Özet / Rapor ------
 
         [CacheAspect(5)]
         public IDataResult<List<FamilyBalanceSummaryDto>> GetSummary(Guid? familyMemberId = null, DateTime? fromUtc = null, DateTime? toUtc = null)
@@ -160,18 +115,15 @@ namespace Business.Concrete
             return new SuccessDataResult<List<FamilyBalanceSummaryDto>>(result);
         }
 
-        // ------ Yazmalar ------
-
         [SecuredOperation("familybalance.write,admin")]
         [ValidationAspect(typeof(FamilyBalanceEntryValidator))]
         [TransactionScopeAspect]
-        [CacheRemoveAspect("IFamilyBalanceEntryService.Get")]
+        [CacheRemoveAspect(".*IFamilyBalanceEntryService.*Get.*")]
         public IResult Add(FamilyBalanceEntry entry)
         {
             if (_memberDal.Get(x => x.Id == entry.FamilyMemberId) == null)
                 return new ErrorResult("عضو خانواده یافت نشد.");
 
-            // Not: Amount > 0; yön In/Out zaten DTO’da.
             _entryDal.Add(entry);
             return new SuccessResult("ورودی تراز خانواده ثبت شد.");
         }
@@ -179,7 +131,7 @@ namespace Business.Concrete
         [SecuredOperation("familybalance.write,admin")]
         [ValidationAspect(typeof(FamilyBalanceEntryValidator))]
         [TransactionScopeAspect]
-        [CacheRemoveAspect("IFamilyBalanceEntryService.Get")]
+        [CacheRemoveAspect(".*IFamilyBalanceEntryService.*Get.*")]
         public IResult Update(FamilyBalanceEntry entry)
         {
             var current = _entryDal.Get(x => x.Id == entry.Id);
@@ -204,13 +156,145 @@ namespace Business.Concrete
 
         [SecuredOperation("familybalance.write,admin")]
         [TransactionScopeAspect]
-        [CacheRemoveAspect("IFamilyBalanceEntryService.Get")]
+        [CacheRemoveAspect(".*IFamilyBalanceEntryService.*Get.*")]
         public IResult Delete(Guid id)
         {
             var e = _entryDal.Get(x => x.Id == id);
             if (e == null) return new ErrorResult("یافت نشد.");
             _entryDal.Delete(e);
             return new SuccessResult("حذف شد.");
+        }
+
+        private static string ToDariDayName(DayOfWeek dow) => dow switch
+        {
+            DayOfWeek.Saturday => "شنبه",
+            DayOfWeek.Sunday => "یکشنبه",
+            DayOfWeek.Monday => "دوشنبه",
+            DayOfWeek.Tuesday => "سه‌شنبه",
+            DayOfWeek.Wednesday => "چهارشنبه",
+            DayOfWeek.Thursday => "پنجشنبه",
+            DayOfWeek.Friday => "جمعه",
+            _ => ""
+        };
+
+
+
+        //[CacheAspect(10)]
+        public IDataResult<PagedWithSummaryDto<FamilyBalanceEntryDetailDto>> GetDetails(QueryOptions opt, Guid? familyMemberId = null)
+        {
+            opt ??= new QueryOptions();
+
+            var baseQ = _entryDal.QueryNoTracking();
+
+            if (familyMemberId.HasValue && familyMemberId.Value != Guid.Empty)
+                baseQ = baseQ.Where(x => x.FamilyMemberId == familyMemberId.Value);
+
+            baseQ = baseQ.ApplyIncludes(opt.Includes);
+
+            var searchFields = opt.ExtractSearchFields(out var remainingFilters);
+
+            // ✅ Entity filtreleri + DTO'ya ertelenenler
+            baseQ = baseQ.ApplyFilters(remainingFilters, out var deferredEntityFilters);
+
+            var members = _memberDal.QueryNoTracking();
+            var users = _userDal.QueryNoTracking();
+
+            var projected =
+                from e in baseQ
+                join m in members on e.FamilyMemberId equals m.Id
+                join u in users on e.CreatedByUserId equals u.Id into uj
+                from u in uj.DefaultIfEmpty()
+                select new FamilyBalanceEntryDetailDto
+                {
+                    Id = e.Id,
+
+                    FamilyMemberId = e.FamilyMemberId,
+                    FamilyMemberName = m.DisplayName,
+
+                    CreatedByUserId = e.CreatedByUserId,
+                    CreatedByUserName = u != null ? $"{u.FirstName} {u.LastName}".Trim() : "",
+                    CreatedAtUtc = DateOnly.FromDateTime(e.CreatedAtUtc),
+
+                    Direction = e.Direction.ToString(),
+                    Amount = e.Amount,
+                    paymentMethod = e.PaymentMethod,
+                    ReferenceNo = e.PaymentReference ?? "",
+
+                    OccurredAtUtc = e.OccurredAtUtc,
+
+                    PeriodYear = e.PeriodYear,
+                    PeriodMonth = e.PeriodMonth,
+
+                    FamilyPayoutId = e.FamilyPayoutId,
+                    OwnerDistributionId = e.OwnerDistributionId,
+                    CollectionId = e.CollectionId,
+                    ContractId = e.ContractId,
+
+                    Notes = e.Notes
+                };
+
+            // ✅ DTO tarafına ertelenen filtreler (FamilyMemberName / CreatedByUserName vb.)
+            projected = projected.ApplyFilters(deferredEntityFilters);
+
+            // Search (kullanıyorsan)
+            if (!string.IsNullOrWhiteSpace(opt.Search))
+                projected = projected.ApplySearch(opt.Search, searchFields);
+
+            // ✅ Summary: filtre+search sonrası, paging öncesi
+            var summary = projected
+                .GroupBy(_ => 1)
+                .Select(g => new BalanceSummaryDto
+                {
+                    TotalIn = g.Where(x => x.Direction == "In").Select(x => (decimal?)x.Amount).Sum() ?? 0m,
+                    TotalOut = g.Where(x => x.Direction == "Out").Select(x => (decimal?)x.Amount).Sum() ?? 0m
+                })
+                .FirstOrDefault() ?? new BalanceSummaryDto();
+
+            var total = projected.Count();
+
+            projected = projected.ApplySort(opt.Sort);
+            if (!projected.Expression.ToString()!.Contains("OrderBy"))
+                projected = projected.OrderByDescending(x => x.OccurredAtUtc);
+
+            var items = projected.ApplyPaging(opt.Page, opt.PageSize).ToList();
+            FillComputedFields(items);
+
+            return new SuccessDataResult<PagedWithSummaryDto<FamilyBalanceEntryDetailDto>>(
+                new PagedWithSummaryDto<FamilyBalanceEntryDetailDto>
+                {
+                    Page = new PagedResult<FamilyBalanceEntryDetailDto>
+                    {
+                        Items = items,
+                        Page = opt.Page,
+                        PageSize = opt.PageSize,
+                        TotalCount = total
+                    },
+                    Summary = summary
+                }
+            );
+        }
+
+        private static readonly CultureInfo FaCulture = new("fa-IR");
+
+        private static void FillComputedFields(List<FamilyBalanceEntryDetailDto> items)
+        {
+            var en = CultureInfo.GetCultureInfo("en-US");
+
+            foreach (var x in items)
+            {
+                x.OccurredTime = x.OccurredAtUtc.ToString("hh:mm tt", en);
+                x.DayName = x.OccurredAtUtc.ToString("dddd", FaCulture);
+
+                x.DirectionLabel = string.Equals(x.Direction, "In", StringComparison.OrdinalIgnoreCase)
+                    ? "دریافت (ورود به حساب)"
+                    : string.Equals(x.Direction, "Out", StringComparison.OrdinalIgnoreCase)
+                        ? "پرداخت (خروج از حساب)"
+                        : x.Direction;
+
+                x.PeriodLabel = (x.PeriodYear.HasValue && x.PeriodMonth.HasValue)
+                    ? $"{x.PeriodYear.Value}-{x.PeriodMonth.Value:00}"
+                    : null;
+            }
         }
     }
 }

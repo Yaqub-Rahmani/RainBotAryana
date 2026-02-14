@@ -11,8 +11,8 @@ using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace DataAccess.Concrete.EntityFramework
 {
-    //dotnet ef migrations add AddFranchiseOwnerBalance -p.\DataAccess\DataAccess.csproj -c RainBotContext
-    //dotnet ef database update -p.\DataAccess\DataAccess.csproj -c RainBotContext
+//dotnet ef migrations add updateEmpolyeeDediles -p.\DataAccess\DataAccess.csproj -c RainBotContext
+//dotnet ef database update -p.\DataAccess\DataAccess.csproj -c RainBotContext
 
     public class RainBotContext : DbContext
     {
@@ -64,6 +64,11 @@ namespace DataAccess.Concrete.EntityFramework
         public DbSet<MoneyAccount> MoneyAccounts => Set<MoneyAccount>();
         public DbSet<MoneyEntry> MoneyEntries => Set<MoneyEntry>();
 
+        // ===== Employees =====
+        public DbSet<Employee> Employees => Set<Employee>();
+        public DbSet<EmployeeWorkInfo> EmployeeWorkInfos => Set<EmployeeWorkInfo>();
+        public DbSet<Expense> Expenses => Set<Expense>();
+
 
         public DbSet<User> Users => Set<User>();
         public DbSet<OperationClaim> OperationClaims => Set<OperationClaim>();
@@ -76,6 +81,56 @@ namespace DataAccess.Concrete.EntityFramework
 
         protected override void OnModelCreating(ModelBuilder model)
         {
+            // ===== Employees =====
+            model.Entity<Employee>(b =>
+            {
+                b.ToTable("Employee");
+                b.HasKey(x => x.Id);
+                b.Property(x => x.DisplayName).IsRequired().HasMaxLength(200);
+                b.Property(x => x.FatherName).IsRequired().HasMaxLength(200);
+                b.Property(x => x.NationalId).HasMaxLength(20);
+                b.HasIndex(x => x.NationalId);
+                b.HasIndex(x => x.IsActive);
+            });
+
+            model.Entity<Expense>(b =>
+            {
+                b.ToTable("Expense");
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.EmployeeId);
+            });
+
+            model.Entity<EmployeeTransaction>(b =>
+            {
+                b.ToTable("EmployeeTransactions");
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.EmployeeId);
+                b.HasIndex(x => new { x.EmployeeId, x.Year, x.Month });
+            });
+
+            model.Entity<EmployeeWorkInfo>(b =>
+            {
+                b.ToTable("EmployeeWorkInfos");
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.EmployeeId).IsUnique();
+                b.Property(x => x.JobTitle).HasMaxLength(200);
+                b.Property(x => x.Notes).HasMaxLength(500);
+                b.Property(x => x.SalaryAmount).HasColumnType("decimal(18,2)");
+                b.Property(x => x.Interest).HasColumnType("decimal(18,2)");
+                b.Property(x => x.Taxes).HasColumnType("decimal(18,2)");
+
+                b.HasOne(x => x.Employee)
+                 .WithMany()
+                 .HasForeignKey(x => x.EmployeeId)
+                 .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            model.Entity<Expense>(b =>
+            {
+                b.ToTable("Expense");
+                b.HasIndex(x => new { x.EmployeeId, x.Category, x.OccurredAtUtc });
+            });
+
             model.Entity<MediaAsset>(b =>
             {
                 b.ToTable("MediaAssets");

@@ -15,13 +15,11 @@ namespace Entities.Concrete
     {
         public Guid Id { get; set; }
 
-        // ilişki
         [Required]
         public Guid MarketId { get; set; }
 
-        // alanlar
-        public string FloorName { get; set; } = null!; // örn: "Zemin", "1. Kat"
-        public int Level { get; set; }                 // örn: 0,1,2,-1
+        public string FloorName { get; set; } = null!; 
+        public int Level { get; set; }
         public bool Status { get; set; } = true;
 
         [JsonIgnore]

@@ -9,7 +9,7 @@ using Core.Entities;
 
 namespace Entities.Concrete
 {
-    //Market Sahibi İç Dağıtım Oranları(çok alanlı politika)
+
     public class OwnerDistributionPolicy: IEntity
     {
         [Key] public Guid Id { get; set; }
@@ -30,6 +30,7 @@ namespace Entities.Concrete
         public int CreatedByUserId { get; set; }
         public int? UpdatedByUserId { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
+        public bool IsActive { get; set; }
 
         [MaxLength(300)] public string? Notes { get; set; }
 

@@ -11,21 +11,16 @@ using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //OwnerDistribution(Paket dağıtım olayı – anlık “snapshot”)
-    //Market sahibi payı için tek bir dağıtım çalıştırması.O an kullanılan yüzdeleri ve tutarları snapshot olarak saklarız ki,
-    //ileride oranlar değişse bile bu kayıt sabit kalsın.
-    // OwnerDistribution (Paket dağıtım olayı – anlık “snapshot”)
+
     public class OwnerDistribution : IEntity
     {
         [Key]
         public Guid Id { get; set; }
 
-        /// <summary>Kaynağına iz için: ilgili sözleşme ve (varsa) tahsilat/dağıtım satırı</summary>
         public Guid? ContractId { get; set; }
         public Guid? CollectionId { get; set; }
-        public Guid? CollectionAllocationId { get; set; } // Kind=Owner satırı genelde
+        public Guid? CollectionAllocationId { get; set; } 
 
-        /// <summary>Dağıtıma giren toplam market sahibi payı</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal OwnerAmountInput { get; set; }
 
@@ -43,10 +38,9 @@ namespace Entities.Concrete
         [Column(TypeName = "decimal(18,2)")] public decimal AmountOwnerReserve { get; set; }
         [Column(TypeName = "decimal(18,2)")] public decimal AmountFamilyPool { get; set; }
 
-        /// <summary>İşlem zamanı</summary>
+
         public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
 
-        /// <summary>Not/Açıklama</summary>
         [MaxLength(500)]
         public string? Notes { get; set; }
 

@@ -40,8 +40,8 @@ namespace Business.Concrete
             if (toUtc.HasValue) q = q.Where(e => e.OccurredAtUtc <= toUtc.Value);
             if (excludeEntryId.HasValue) q = q.Where(e => e.Id != excludeEntryId.Value);
 
-            var totalIn = q.Where(e => e.Direction == ReserveEntryDirection.In).Sum(e => (decimal?)e.Amount) ?? 0m;
-            var totalOut = q.Where(e => e.Direction == ReserveEntryDirection.Out).Sum(e => (decimal?)e.Amount) ?? 0m;
+            var totalIn = q.Where(e => e.Direction == BalanceDirection.In).Sum(e => (decimal?)e.Amount) ?? 0m;
+            var totalOut = q.Where(e => e.Direction == BalanceDirection.Out).Sum(e => (decimal?)e.Amount) ?? 0m;
             return (totalIn, totalOut);
         }
 
@@ -78,7 +78,7 @@ namespace Business.Concrete
 
         // ---------- Okumalar ----------
         [CacheAspect(10)]
-        public IDataResult<List<ReserveEntry>> GetAll(Guid? accountId = null, ReserveEntryDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null)
+        public IDataResult<List<ReserveEntry>> GetAll(Guid? accountId = null, BalanceDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null)
         {
             var q = _entryDal.QueryNoTracking();
             if (accountId.HasValue && accountId.Value != Guid.Empty) q = q.Where(x => x.ReserveAccountId == accountId.Value);
@@ -98,7 +98,7 @@ namespace Business.Concrete
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<ReserveEntryDetailDto>> GetDetails(QueryOptions opt, Guid? accountId = null, ReserveEntryDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null)
+        public IDataResult<PagedResult<ReserveEntryDetailDto>> GetDetails(QueryOptions opt, Guid? accountId = null, BalanceDirection? dir = null, DateTime? fromUtc = null, DateTime? toUtc = null)
         {
             opt ??= new QueryOptions();
             var q = _entryDal.QueryNoTracking();
@@ -172,7 +172,7 @@ namespace Business.Concrete
 
             entry.Amount = Round2(entry.Amount);
 
-            if (entry.Direction == ReserveEntryDirection.Out && !allowOverdraw)
+            if (entry.Direction == BalanceDirection.Out && !allowOverdraw)
                 EnsureNoOverdraw(entry.ReserveAccountId, entry.Amount);
 
             _entryDal.Add(entry);
@@ -192,7 +192,7 @@ namespace Business.Concrete
                 return new ErrorResult("حساب رزرو یافت نشد.");
 
             // Overdraw check (mevcut kaydı hariç tut)
-            if (entry.Direction == ReserveEntryDirection.Out && !allowOverdraw)
+            if (entry.Direction == BalanceDirection.Out && !allowOverdraw)
             {
                 var (ti, to) = SumForAccount(entry.ReserveAccountId, null, null, entry.Id);
                 var balance = ti - to;

@@ -12,20 +12,6 @@ using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-
-    //    tahakkuk/borç tarafı ile devam ediyoruz.Bu parçada iki yalın entity ekliyoruz:
-    //Accrual → her ay oluşan borç kalemi(Owner/Franchise/Market sabitleri + Electricity sayaçtan),
-    //AccrualSettlement → tahsilat dağıtımının hangi borcu kapattığını kayıtlar(kısmi/çoklu kapanış destekli).
-    //Not: Hesaplama ve öncelik sırası(Elektrik → Market → Owner → Franchise) business katmanında kalacak; entity’ler yalnızca kayıt/izleme amacıyla yalın tutuldu.
-
-    public enum AccrualKind
-    {
-        Owner = 1,
-        Franchise = 2,
-        Market = 3,
-        Electricity = 4
-    }
-
     public enum AccrualStatus
     {
         Open = 1,
@@ -38,50 +24,39 @@ namespace Entities.Concrete
         [Key]
         public Guid Id { get; set; }
 
-        /// <summary>Dükkân</summary>
         [Required]
         public Guid ShopId { get; set; }
 
-        /// <summary>Kiracı</summary>
         [Required]
         public Guid TenantId { get; set; }
 
-        /// <summary>Kaynağı olan sözleşme</summary>
         [Required]
         public Guid ContractId { get; set; }
 
-        /// <summary>Elektrik borcuysa ilgili sayaç okuması</summary>
         public Guid? MeterReadingId { get; set; }
 
-        /// <summary>Kalem türü (Owner/Franchise/Market/Electricity)</summary>
         [Required]
-        public AccrualKind Kind { get; set; }
+        public AllocationKind Kind { get; set; }
 
-        /// <summary>Borç hangi döneme ait? (YYYY, 1–12)</summary>
         [Range(1300, 1500)]
         public int Year { get; set; }
 
         [Range(1, 12)]
         public int Month { get; set; }
 
-        /// <summary>Oluşturulma (tahakkuk) tarihi</summary>
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
         public int CreatedByUserId { get; set; }
         public int? UpdatedByUserId { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
 
-        /// <summary>Durum</summary>
         public AccrualStatus Status { get; set; } = AccrualStatus.Open;
 
-        /// <summary>Toplam borç tutarı</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 
-        /// <summary>Kalan borç</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal OutstandingAmount { get; set; }
 
-        /// <summary>Opsiyonel not</summary>
         [MaxLength(500)]
         public string? Notes { get; set; }
 

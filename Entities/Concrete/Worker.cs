@@ -15,7 +15,6 @@ namespace Entities.Concrete
         [Key]
         public Guid Id { get; set; }
 
-        /// <summary>Kiracı adı / ticari unvan</summary>
         [Required, MaxLength(200)]
         public string DisplayName { get; set; } = default!;
 

@@ -6,6 +6,7 @@ using Core.Aspects.Autofac.Caching;
 using Core.Aspects.Autofac.Transaction;
 using Core.Aspects.Autofac.Validation;
 using Core.Extensions;
+using Core.Utilities.KabulDateTime;
 using Core.Utilities.Paging;
 using Core.Utilities.Query;
 using Core.Utilities.Results;
@@ -25,120 +26,139 @@ namespace Business.Concrete
 {
     public class CollectionAllocationManager : ICollectionAllocationService
     {
-        private readonly ICollectionAllocationDal _dal;
+        private readonly ICollectionAllocationDal _allocationDal;
+        private readonly ICollectionDal _collectionDal;
+        private readonly IDollarRateDal _dollarRateDal;
+        private readonly ITimeProvider _timeProvider;
 
-        public CollectionAllocationManager(ICollectionAllocationDal dal)
+        public CollectionAllocationManager(
+            ICollectionAllocationDal allocationDal,
+            ICollectionDal collectionDal,
+            IDollarRateDal dollarRateDal,
+            ITimeProvider timeProvider)
         {
-            _dal = dal;
+            _allocationDal = allocationDal;
+            _collectionDal = collectionDal;
+            _dollarRateDal = dollarRateDal;
+            _timeProvider = timeProvider;
         }
 
         [CacheAspect(10)]
-        public IDataResult<List<CollectionAllocation>> GetAll(Guid? collectionId = null, Guid? contractId = null)
+        public IDataResult<CollectionAllocationDto> GetById(Guid id)
         {
-            var q = _dal.QueryNoTracking();
+            var alloc = _allocationDal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
+            if (alloc == null)
+                return new ErrorDataResult<CollectionAllocationDto>(null,"سطر توزیع یافت نشد.");
 
-            if (collectionId.HasValue)
-                q = q.Where(x => x.CollectionId == collectionId.Value);
+            var collection = _collectionDal.QueryNoTracking()
+                .FirstOrDefault(c => c.Id == alloc.CollectionId);
 
-            if (contractId.HasValue)
-                q = q.Where(x => x.ContractId == contractId.Value);
+            if (collection == null)
+                return new ErrorDataResult<CollectionAllocationDto>(null,"پرداخت مرتبط یافت نشد.");
 
-            return new SuccessDataResult<List<CollectionAllocation>>(q.ToList());
+            var rate = GetRateForDate(collection.PaidAtUtc);
+            if (rate == null)
+                return new ErrorDataResult<CollectionAllocationDto>(null,"نرخ دالر برای آن تاریخ یافت نشد.");
+
+            var dto = MapToDto(alloc, rate.Value);
+
+            return new SuccessDataResult<CollectionAllocationDto>(dto);
         }
 
         [CacheAspect(10)]
-        public IDataResult<CollectionAllocation> GetById(Guid id)
+        public IDataResult<List<CollectionAllocationDto>> GetByCollection(Guid collectionId)
         {
-            var e = _dal.Get(x => x.Id == id);
-            return e == null
-                ? new ErrorDataResult<CollectionAllocation>(null, "یافت نشد.")
-                : new SuccessDataResult<CollectionAllocation>(e);
-        }
+            var collection = _collectionDal.QueryNoTracking()
+                .FirstOrDefault(c => c.Id == collectionId);
 
-        [CacheAspect(10)]
-        public IDataResult<CollectionAllocationDetailDto> GetDetail(Guid id)
-        {
-            var e = _dal.Get(x => x.Id == id);
-            if (e == null) return new ErrorDataResult<CollectionAllocationDetailDto>(null, "یافت نشد.");
+            if (collection == null)
+                return new ErrorDataResult<List<CollectionAllocationDto>>(null,"پرداخت یافت نشد.");
 
-            var dto = new CollectionAllocationDetailDto
-            {
-                Id = e.Id,
-                CollectionId = e.CollectionId,
-                Kind = e.Kind,
-                Amount = e.Amount,
-                ContractId = e.ContractId,
-                ShopId = e.ShopId,
-                TenantId = e.TenantId,
-                MeterReadingId = e.MeterReadingId,
-                PeriodYear = e.PeriodYear,
-                PeriodMonth = e.PeriodMonth,
-                Notes = e.Notes,
-                CreatedByUserId = e.CreatedByUserId,
-                CreatedAtUtc = e.CreatedAtUtc
-            };
+            var rate = GetRateForDate(collection.PaidAtUtc);
+            if (rate == null)
+                return new ErrorDataResult<List<CollectionAllocationDto>>(null,"نرخ دالر برای آن تاریخ یافت نشد.");
 
-            return new SuccessDataResult<CollectionAllocationDetailDto>(dto);
+            var allocs = _allocationDal.QueryNoTracking()
+                .Where(x => x.CollectionId == collectionId)
+                .OrderBy(x => x.CreatedAtUtc)
+                .ThenBy(x => x.Id)
+                .ToList();
+
+            var list = allocs
+                .Select(a => MapToDto(a, rate.Value))
+                .ToList();
+
+            return new SuccessDataResult<List<CollectionAllocationDto>>(list);
         }
 
         [ValidationAspect(typeof(CollectionAllocationCreateValidator))]
         [TransactionScopeAspect, CacheRemoveAspect("ICollectionAllocationService.Get")]
+        [SecuredOperation("admin,collectionallocation.add")]
         public IResult Add(CollectionAllocationCreateDto dto, int userId)
         {
-            var e = new CollectionAllocation
+            var collection = _collectionDal.QueryNoTracking()
+                .FirstOrDefault(c => c.Id == dto.CollectionId);
+
+            if (collection == null)
+                return new ErrorResult("پرداخت مرتبط یافت نشد.");
+
+            var entity = new CollectionAllocation
             {
                 Id = Guid.NewGuid(),
                 CollectionId = dto.CollectionId,
                 Kind = dto.Kind,
                 Amount = dto.Amount,
-                ContractId = dto.ContractId,
-                ShopId = dto.ShopId,
-                TenantId = dto.TenantId,
+                ContractId = dto.ContractId ?? collection.ContractId,
+                ShopId = dto.ShopId ?? collection.ShopId,
+                TenantId = dto.TenantId ?? collection.TenantId,
                 MeterReadingId = dto.MeterReadingId,
                 PeriodYear = dto.PeriodYear,
                 PeriodMonth = dto.PeriodMonth,
                 Notes = dto.Notes,
                 CreatedByUserId = userId,
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = _timeProvider.UtcNow()
             };
 
-            _dal.Add(e);
-            return new SuccessResult("ثبت شد.");
+            _allocationDal.Add(entity);
+
+            return new SuccessResult("سطر توزیع ثبت شد.");
         }
 
-        [ValidationAspect(typeof(CollectionAllocationUpdateValidator))]
-        [TransactionScopeAspect, CacheRemoveAspect("ICollectionAllocationService.Get")]
-        public IResult Update(CollectionAllocationUpdateDto dto, int userId)
+        private decimal? GetRateForDate(DateTime dateUtc)
         {
-            var e = _dal.Get(x => x.Id == dto.Id);
-            if (e == null) return new ErrorResult("یافت نشد.");
+            var rate = _dollarRateDal.QueryNoTracking()
+                .Where(r => r.EffectiveFromUtc <= dateUtc)
+                .OrderByDescending(r => r.EffectiveFromUtc)
+                .ThenByDescending(r => r.Id)
+                .FirstOrDefault();
 
-            e.Kind = dto.Kind;
-            e.Amount = dto.Amount;
-            e.ContractId = dto.ContractId;
-            e.ShopId = dto.ShopId;
-            e.TenantId = dto.TenantId;
-            e.MeterReadingId = dto.MeterReadingId;
-            e.PeriodYear = dto.PeriodYear;
-            e.PeriodMonth = dto.PeriodMonth;
-            e.Notes = dto.Notes;
-
-            _dal.Update(e);
-
-            return new SuccessResult("بروز شد.");
+            return rate?.AfnPerUsd;
         }
 
-        [TransactionScopeAspect, CacheRemoveAspect("ICollectionAllocationService.Get")]
-        public IResult Delete(Guid id)
+        private static CollectionAllocationDto MapToDto(CollectionAllocation a, decimal afnPerUsd)
         {
-            var e = _dal.Get(x => x.Id == id);
-            if (e == null) return new ErrorResult("یافت نشد.");
+            if (afnPerUsd <= 0) afnPerUsd = 1; // güvenlik
 
-            if (e.AccrualSettlements.Any())
-                return new ErrorResult("به علت وجود تسویه، حذف ممکن نیست.");
+            var usd = Math.Round(a.Amount / afnPerUsd, 4);
 
-            _dal.Delete(e);
-            return new SuccessResult("حذف شد.");
+            return new CollectionAllocationDto
+            {
+                Id = a.Id,
+                CollectionId = a.CollectionId,
+                Kind = a.Kind,
+                Amount = a.Amount,
+                AfnPerUsdAtThatTime = afnPerUsd,
+                UsdEquivalent = usd,
+                ContractId = a.ContractId,
+                ShopId = a.ShopId,
+                TenantId = a.TenantId,
+                MeterReadingId = a.MeterReadingId,
+                PeriodYear = a.PeriodYear,
+                PeriodMonth = a.PeriodMonth,
+                Notes = a.Notes,
+                CreatedByUserId = a.CreatedByUserId,
+                CreatedAtUtc = a.CreatedAtUtc
+            };
         }
     }
 }

@@ -17,10 +17,10 @@ namespace Entities.Concrete
         public Guid EmployeeId { get; set; }
 
         [Required]
-        public BalanceDirection Direction { get; set; } // In / Out
+        public BalanceDirection Direction { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
-        public decimal Amount { get; set; } // In için +, Out için + (yön belirler)
+        public decimal Amount { get; set; } 
         public Guid? MoneyEntryId { get; set; }
 
         [Range(1300, 1500)]

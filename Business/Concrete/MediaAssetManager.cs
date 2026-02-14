@@ -109,6 +109,9 @@ namespace Business.Concrete
         [ValidationAspect(typeof(MediaAssetValidator))]
         [TransactionScopeAspect]
         [CacheRemoveAspect("IMediaAssetService.Get")]
+        [CacheRemoveAspect(".*FamilyMember.*Get.*")]
+        [CacheRemoveAspect(".*FranchiseOwner.*Get.*")]
+        [CacheRemoveAspect(".*Employee.*Get.*")]
         public IResult Add(MediaAsset asset)
         {
             asset.CreatedAt = DateTime.UtcNow;
@@ -132,6 +135,8 @@ namespace Business.Concrete
         [ValidationAspect(typeof(MediaAssetValidator))]
         [TransactionScopeAspect]
         [CacheRemoveAspect("IMediaAssetService.Get")]
+        [CacheRemoveAspect(".*FamilyMember.*Get.*")]
+        [CacheRemoveAspect(".*FranchiseOwner.*Get.*")]
         public IResult Update(MediaAsset asset)
         {
             var current = _dal.Get(x => x.Id == asset.Id);
@@ -160,8 +165,11 @@ namespace Business.Concrete
         }
 
         [SecuredOperation("mediaasset.write,admin")]
+        [ValidationAspect(typeof(MediaAssetValidator))]
         [TransactionScopeAspect]
         [CacheRemoveAspect("IMediaAssetService.Get")]
+        [CacheRemoveAspect(".*FamilyMember.*Get.*")]
+        [CacheRemoveAspect(".*FranchiseOwner.*Get.*")]
         public IResult Delete(Guid id)
         {
             var e = _dal.Get(x => x.Id == id);
@@ -172,8 +180,11 @@ namespace Business.Concrete
 
         // -------- Primary setter --------
         [SecuredOperation("mediaasset.write,admin")]
+        [ValidationAspect(typeof(MediaAssetValidator))]
         [TransactionScopeAspect]
         [CacheRemoveAspect("IMediaAssetService.Get")]
+        [CacheRemoveAspect(".*FamilyMember.*Get.*")]
+        [CacheRemoveAspect(".*FranchiseOwner.*Get.*")]
         public IResult SetPrimary(Guid id)
         {
             var target = _dal.Get(x => x.Id == id);

@@ -10,54 +10,36 @@ namespace WebAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class CollectionAllocationsController : ControllerBase
+    public class CollectionAllocationController : ControllerBase
     {
         private readonly ICollectionAllocationService _service;
 
-        public CollectionAllocationsController(ICollectionAllocationService service)
+        public CollectionAllocationController(ICollectionAllocationService service)
         {
             _service = service;
         }
 
-        [HttpGet, AllowAnonymous]
-        public IActionResult GetAll([FromQuery] Guid? collectionId, [FromQuery] Guid? contractId)
-            => Ok(_service.GetAll(collectionId, contractId).Data);
-
-        [HttpGet("{id:guid}"), AllowAnonymous]
+        [HttpGet("{id:guid}"), Authorize]
         public IActionResult Get(Guid id)
         {
             var r = _service.GetById(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("{id:guid}/detail"), AllowAnonymous]
-        public IActionResult Detail(Guid id)
+        [HttpGet("by-collection/{collectionId:guid}"), Authorize]
+        public IActionResult GetByCollection(Guid collectionId)
         {
-            var r = _service.GetDetail(id);
-            return r.Success ? Ok(r.Data) : NotFound(r.Message);
+            var r = _service.GetByCollection(collectionId);
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
 
         [HttpPost, Authorize]
         public IActionResult Add([FromBody] CollectionAllocationCreateDto dto)
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
             var r = _service.Add(dto, userId);
-            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
-        }
-
-        [HttpPut("{id:guid}"), Authorize]
-        public IActionResult Update(Guid id, [FromBody] CollectionAllocationUpdateDto dto)
-        {
-            if (dto.Id != id) return BadRequest("شناسه نامعتبر است.");
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var r = _service.Update(dto, userId);
-            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
-        }
-
-        [HttpDelete("{id:guid}"), Authorize]
-        public IActionResult Delete(Guid id)
-        {
-            var r = _service.Delete(id);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
     }

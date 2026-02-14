@@ -3,6 +3,7 @@ using Core.Utilities.Query;
 using Core.Utilities.Results;
 using Entities.Concrete;
 using Entities.Dtos;
+using Entities.Dtos.SingleRatePolicy;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,19 +14,17 @@ namespace Business.Abstract
 {
     public interface ISingleRatePolicyService
     {
-        // Okumalar
-        IDataResult<List<SingleRatePolicy>> GetAll(SingleRateType? type = null);
-        IDataResult<SingleRatePolicy> GetById(Guid id);
-        IDataResult<PagedResult<SingleRatePolicyDetailDto>> GetDetails(QueryOptions opt, SingleRateType? type = null);
-        IDataResult<SingleRatePolicyDetailDto> GetDetailById(Guid id);
-        IDataResult<SingleRatePolicyDetailDto> GetActive(SingleRateType type, DateOnly onDate);
+        IDataResult<List<SingleRatePolicyDto>> GetAll();
+        IDataResult<List<SingleRatePolicyDto>> GetByType(SingleRateType type);
+        IDataResult<SingleRatePolicyDto> GetById(Guid id);
 
-        // Yazmalar
-        IResult Add(SingleRatePolicy policy);
-        IResult Update(SingleRatePolicy policy);
+        /// <summary>
+        /// Belirli bir tarih için (veya bugün) geçerli oran.
+        /// </summary>
+        IDataResult<decimal> GetCurrentRate(SingleRateType type, DateTime? asOfUtc = null);
+
+        IResult Add(SingleRatePolicyCreateDto dto, int userId);
+        IResult Update(SingleRatePolicyUpdateDto dto, int userId);
         IResult Delete(Guid id);
-
-        // Simülasyon
-        IDataResult<object> Simulate(SingleRateType type, decimal baseAmount, DateOnly? onDate = null);
     }
 }

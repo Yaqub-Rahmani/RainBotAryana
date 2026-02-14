@@ -1,4 +1,5 @@
-﻿using Entities.Concrete;
+﻿using Core.Utilities.Results;
+using Entities.Concrete;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,5 +13,7 @@ namespace Business.Abstract
         User GetByMail(string email);
         void Add(User user);
         List<OperationClaim> GetClaims(User user);
+        IDataResult<User> GetById(int id);
+
     }
 }

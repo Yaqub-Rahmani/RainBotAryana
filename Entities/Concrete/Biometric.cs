@@ -20,8 +20,8 @@ namespace Entities.Concrete
         public Guid OwnerId { get; set; }
 
         public BiometricType Type { get; set; }
-        public byte[] Template { get; set; } = null!;     // BLOB; gerekirse kolon şifreleme
-        public Guid? RelatedMediaAssetId { get; set; }    // Parmak izi görüntüsü gibi görsel eş
+        public byte[] Template { get; set; } = null!;     
+        public Guid? RelatedMediaAssetId { get; set; } 
         public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; }

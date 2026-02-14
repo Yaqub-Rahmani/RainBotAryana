@@ -4,6 +4,7 @@ using Entities.Concrete;
 using Entities.Dtos.shop;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace WebAPI.Controllers
 {
@@ -14,41 +15,15 @@ namespace WebAPI.Controllers
         private readonly IShopService _service;
         public ShopsController(IShopService service) { _service = service; }
 
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult GetAll([FromQuery] bool? onlyActive, [FromQuery] Guid? marketId, [FromQuery] Guid? floorId)
-            => Ok(_service.GetAll(onlyActive, marketId, floorId).Data);
-
-        [HttpGet("{id:guid}")]
-        [AllowAnonymous]
-        public IActionResult Get(Guid id)
-        {
-            var r = _service.GetById(id);
-            return r.Success ? Ok(r.Data) : NotFound(r.Message);
-        }
-
-        [HttpGet("details")]
-        [AllowAnonymous]
-        public IActionResult GetDetails([FromQuery] QueryOptions opt, [FromQuery] Guid? marketId, [FromQuery] Guid? floorId, [FromQuery] bool? onlyActive)
-        {
-            var r = _service.GetDetails(opt, marketId, floorId, onlyActive);
-            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
-        }
-
-        [HttpGet("{id:guid}/detail")]
-        [AllowAnonymous]
-        public IActionResult GetDetail(Guid id)
-        {
-            var r = _service.GetDetailById(id);
-            return r.Success ? Ok(r.Data) : NotFound(r.Message);
-        }
-
         [HttpPost]
         [Authorize]
-        public IActionResult Add([FromBody] Shop dto)
+        public IActionResult Add([FromBody] ShopCreateDto dto)
         {
-            var r = _service.Add(dto);
-            return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var r = _service.Add(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
         [HttpPut("{id:guid}")]
@@ -68,8 +43,20 @@ namespace WebAPI.Controllers
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
+        //  ✅ frontend: shopService.get(id)
+        [HttpGet("{id:guid}")]
+        [AllowAnonymous]
+        public IActionResult GetById(Guid id)
+        {
+            var r = _service.GetById(id);
+            if (!r.Success)
+                return NotFound(r.Message ?? "Kayıt bulunamadı.");
+
+            return Ok(r.Data);
+        }
+
         [HttpGet("with-shares")]
-       // [Authorize]
+        // [Authorize]
         public async Task<IActionResult> GetWithShares([FromQuery] Guid ownerId)
         {
             if (ownerId == Guid.Empty)
@@ -82,7 +69,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpGet("franchise-owners/{ownerId:guid}/shops")]
-        [Authorize] // Yetkilendirme gerekiyorsa aç
+        [Authorize]
         [ProducesResponseType(typeof(IEnumerable<FranchiseOwnerShopsDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> GetFranchiseOwnerShops(Guid ownerId)
@@ -95,7 +82,6 @@ namespace WebAPI.Controllers
             if (!result.Success)
                 return BadRequest(result.Message ?? "İşlem gerçekleştirilemedi.");
 
-            // Servis boş liste dönebilir; 200 OK + [] uygun
             return Ok(result.Data ?? new List<FranchiseOwnerShopsDto>());
         }
 
@@ -107,5 +93,39 @@ namespace WebAPI.Controllers
             var r = await _service.GetAvailableShopsAsync();
             return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
+
+        // ✅ GetShopListView – artık DataResult içinden sadece Data dönüyor
+        [HttpGet("list-view"), AllowAnonymous]
+        public IActionResult GetShopListView()
+        {
+            var result = _service.GetShopListView();
+            return result.Success ? Ok(result.Data) : BadRequest(result.Message);
+        }
+
+        /////////////////////////////////////////////
+        ///
+
+        [HttpGet("assign-screen/mine")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetMyShopsForAssignScreen([FromQuery] Guid ownerId, [FromQuery] QueryOptions opt)
+        {
+            if (ownerId == Guid.Empty)
+                return BadRequest("ownerId is required.");
+
+            var result = await _service.GetMyShopsPagedAsync(ownerId, opt);
+            return result.Success ? Ok(result.Data) : BadRequest(result.Message);
+        }
+
+        [HttpGet("assign-screen/available")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAvailableShopsForAssignScreen([FromQuery] Guid ownerId, [FromQuery] QueryOptions opt)
+        {
+            if (ownerId == Guid.Empty)
+                return BadRequest("ownerId is required.");
+
+            var result = await _service.GetAvailableShopsPagedAsync(ownerId, opt);
+            return result.Success ? Ok(result.Data) : BadRequest(result.Message);
+        }
+
     }
 }

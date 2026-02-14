@@ -7,9 +7,8 @@ using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    // FamilyBalanceEntry (Aile üyesi bakiyesi hareketi)
-    // Aile havuzundan üyelere dağıtılan tutarlar giriş; üye parayı çektiğinde çıkış.
-    public class FamilyBalanceEntry : IEntity
+
+     public class FamilyBalanceEntry : IEntity
     {
         [Key]
         public Guid Id { get; set; }
@@ -18,7 +17,7 @@ namespace Entities.Concrete
         public Guid FamilyMemberId { get; set; }
 
         [Required]
-        public BalanceDirection Direction { get; set; } // In / Out
+        public BalanceDirection Direction { get; set; } 
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
@@ -26,10 +25,31 @@ namespace Entities.Concrete
         public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
 
         // İz bağlantıları (opsiyonel)
-        public Guid? FamilyPayoutId { get; set; } // Aile havuzu dağıtım olayı (In)
-        public Guid? OwnerDistributionId { get; set; } // Kaynak
-        public Guid? CollectionId { get; set; } // Eğer doğrudan tahsilattan aktarım senaryosu olursa
+        public Guid? FamilyPayoutId { get; set; } 
+        public Guid? OwnerDistributionId { get; set; } 
+        public Guid? CollectionId { get; set; }
         public Guid? ContractId { get; set; }
+
+
+        // ✅ Audit (Franchise gibi)
+        public int CreatedByUserId { get; set; }
+        public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+        public int? UpdatedByUserId { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
+        public bool IsActive { get; set; } = true;
+
+        // ✅ Payment metadata (Franchise gibi)
+        public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Unknown;
+
+        [MaxLength(100)]
+        public string? PaymentReference { get; set; }
+
+        // ✅ Period (rapor / filtre)
+        [Range(1300, 1500)]
+        public int? PeriodYear { get; set; }
+
+        [Range(1, 12)]
+        public int? PeriodMonth { get; set; }
 
         [MaxLength(300)]
         public string? Notes { get; set; }

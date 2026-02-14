@@ -20,6 +20,7 @@ using Microsoft.EntityFrameworkCore;
 using Business.ValidationRules.FluentValidation.Accrual;
 using Entities.Dtos.Accrual;
 using System.Globalization;
+using DataAccess.Concrete.EntityFramework;
 
 namespace Business.Concrete
 {
@@ -56,6 +57,46 @@ namespace Business.Concrete
             return e == null
                 ? new ErrorDataResult<Accrual>(null, "یافت نشد.")
                 : new SuccessDataResult<Accrual>(e);
+        }
+
+
+        [CacheAspect(5)]
+        public IDataResult<List<AccrualOpenItemDto>> GetOpenDebtsForContract(Guid contractId)
+        {
+            var query = _dal.QueryNoTracking()
+                .Where(a => a.ContractId == contractId &&
+                            a.OutstandingAmount > 0 &&
+                            a.Status != AccrualStatus.Settled);
+
+            var list = query
+                .OrderBy(a => a.Year)
+                .ThenBy(a => a.Month)
+                .ThenBy(a => a.Kind)
+                .Select(a => new AccrualOpenItemDto
+                {
+                    AccrualId = a.Id,
+                    Year = a.Year,
+                    Month = a.Month,
+                    Kind = a.Kind,
+                    KindDisplayName = GetKindDisplayName(a.Kind),
+                    Amount = a.Amount,
+                    OutstandingAmount = a.OutstandingAmount
+                })
+                .ToList();
+
+            return new SuccessDataResult<List<AccrualOpenItemDto>>(list);
+        }
+
+        private static string GetKindDisplayName(AllocationKind kind)
+        {
+            return kind switch
+            {
+                AllocationKind.Electricity => "مصرف برق",
+                AllocationKind.Market => "مارکیت",
+                AllocationKind.Owner => "صاحب مارکیت",
+                AllocationKind.Franchise => "امتیازی",
+                _ => kind.ToString()
+            };
         }
 
         [CacheAspect(10)]
@@ -220,5 +261,6 @@ namespace Business.Concrete
             _dal.Update(e);
             return new SuccessResult("محاسبه‌ی بدهی باقی‌مانده بروز شد.");
         }
+
     }
 }

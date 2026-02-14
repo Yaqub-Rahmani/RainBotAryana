@@ -1,88 +1,73 @@
 ﻿using Business.Abstract;
 using Core.Utilities.Query;
 using Entities.Concrete;
+using Entities.Dtos.OwnerDistributionPolicy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace WebAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class OwnerDistributionPoliciesController : ControllerBase
+    public class OwnerDistributionPolicyController : ControllerBase
     {
         private readonly IOwnerDistributionPolicyService _service;
-        public OwnerDistributionPoliciesController(IOwnerDistributionPolicyService service) { _service = service; }
 
-        // Reads
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult GetAll() => Ok(_service.GetAll().Data);
+        public OwnerDistributionPolicyController(IOwnerDistributionPolicyService service)
+        {
+            _service = service;
+        }
 
-        [HttpGet("{id:guid}")]
-        [AllowAnonymous]
+        [HttpGet, Authorize]
+        public IActionResult GetAll()
+        {
+            var r = _service.GetAll();
+            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
+        }
+
+        [HttpGet("{id:guid}"), Authorize]
         public IActionResult Get(Guid id)
         {
             var r = _service.GetById(id);
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("details")]
-        [AllowAnonymous]
-        public IActionResult GetDetails([FromQuery] QueryOptions opt)
+        [HttpGet("current"), AllowAnonymous]
+        public IActionResult GetCurrent()
         {
-            var r = _service.GetDetails(opt);
-            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
-        }
-
-        [HttpGet("{id:guid}/detail")]
-        [AllowAnonymous]
-        public IActionResult GetDetail(Guid id)
-        {
-            var r = _service.GetDetailById(id);
+            var r = _service.GetCurrent();
             return r.Success ? Ok(r.Data) : NotFound(r.Message);
         }
 
-        [HttpGet("active")]
-        [AllowAnonymous]
-        public IActionResult GetActive([FromQuery] DateOnly on)
-        {
-            var r = _service.GetActiveForDate(on);
-            return r.Success ? Ok(r.Data) : NotFound(r.Message);
-        }
-
-        // Writes
         [HttpPost]
-        [Authorize]
-        public IActionResult Add([FromBody] OwnerDistributionPolicy dto)
+        public IActionResult Add([FromBody] OwnerDistributionPolicyCreateDto dto)
         {
-            var r = _service.Add(dto);
-            return r.Success ? CreatedAtAction(nameof(Get), new { id = dto.Id }, dto) : BadRequest(r.Message);
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var r = _service.Add(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpPut("{id:guid}")]
-        [Authorize]
-        public IActionResult Update(Guid id, [FromBody] OwnerDistributionPolicy dto)
+        [HttpPut("{id:guid}"), Authorize]
+        public IActionResult Update(Guid id, [FromBody] OwnerDistributionPolicyUpdateDto dto)
         {
-            if (id != dto.Id) return BadRequest("Id mismatch.");
-            var r = _service.Update(dto);
-            return r.Success ? Ok() : BadRequest(r.Message);
+            if (id != dto.Id)
+                return BadRequest("شناسه با مدل هم‌خوانی ندارد.");
+
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized("کاربر نامعتبر است.");
+
+            var r = _service.Update(dto, userId);
+            return r.Success ? Ok(r.Message) : BadRequest(r.Message);
         }
 
-        [HttpDelete("{id:guid}")]
-        [Authorize]
+        [HttpDelete("{id:guid}"), Authorize]
         public IActionResult Delete(Guid id)
         {
             var r = _service.Delete(id);
             return r.Success ? Ok(r.Message) : BadRequest(r.Message);
-        }
-
-        // Simulate
-        [HttpGet("simulate")]
-        [AllowAnonymous]
-        public IActionResult Simulate([FromQuery] decimal ownerAmount, [FromQuery] DateOnly? on)
-        {
-            var r = _service.Simulate(ownerAmount, on);
-            return r.Success ? Ok(r.Data) : BadRequest(r.Message);
         }
     }
 }

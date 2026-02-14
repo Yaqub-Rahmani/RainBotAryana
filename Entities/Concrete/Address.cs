@@ -11,16 +11,13 @@ using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
-    //    Adresi tek bir yerde yönetin(en pratik)
-    //Her varlık için ayrı ayrı adres alanları yerine tek bir Address tablosu kullan, hangi varlığa ait olduğunu Owner alanlarıyla belirt:
 
     public class Address : IEntity
     {
         public Guid Id { get; set; }
 
-        // Sahiplik (polimorfik bağ)
         public MediaOwnerType OwnerType { get; set; }
-        public Guid OwnerId { get; set; } // ShopId / TenantId / FranchiseOwnerId / FamilyMemberId
+        public Guid OwnerId { get; set; } 
 
         // İl/İlçe
         public int ProvinceId { get; set; }
@@ -36,7 +33,6 @@ namespace Entities.Concrete
 
         public string Line1 { get; set; } = null!;
 
-        // Varsayılan adres flag’i (bir varlığın birden çok adresi olabilir)
         public bool IsPrimary { get; set; } = true;
 
         // Navigation

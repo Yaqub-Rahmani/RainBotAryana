@@ -12,9 +12,16 @@ namespace Business.ValidationRules.FluentValidation.AccrualSettlement
     {
         public AccrualSettlementCreateValidator()
         {
-            RuleFor(x => x.CollectionAllocationId).NotEmpty().WithMessage("انتخاب تخصیص الزامی است.");
-            RuleFor(x => x.AccrualId).NotEmpty().WithMessage("انتخاب بدهی الزامی است.");
-            RuleFor(x => x.Amount).GreaterThan(0).WithMessage("مبلغ باید بزرگتر از 0 باشد.");
+            RuleFor(x => x.CollectionAllocationId)
+                .NotEqual(Guid.Empty).WithMessage("سطر توزیع نامعتبر است.");
+
+            RuleFor(x => x.AccrualId)
+                .NotEqual(Guid.Empty).WithMessage("بدهی (Accrual) نامعتبر است.");
+
+            RuleFor(x => x.Amount)
+                .GreaterThan(0).WithMessage("مبلغ باید بزرگتر از صفر باشد.");
         }
     }
+
+
 }

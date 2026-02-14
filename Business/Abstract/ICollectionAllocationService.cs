@@ -14,12 +14,9 @@ namespace Business.Abstract
 {
     public interface ICollectionAllocationService
     {
-        IDataResult<List<CollectionAllocation>> GetAll(Guid? collectionId = null, Guid? contractId = null);
-        IDataResult<CollectionAllocation> GetById(Guid id);
-        IDataResult<CollectionAllocationDetailDto> GetDetail(Guid id);
+        IDataResult<CollectionAllocationDto> GetById(Guid id);
+        IDataResult<List<CollectionAllocationDto>> GetByCollection(Guid collectionId);
 
         IResult Add(CollectionAllocationCreateDto dto, int userId);
-        IResult Update(CollectionAllocationUpdateDto dto, int userId);
-        IResult Delete(Guid id);
     }
 }

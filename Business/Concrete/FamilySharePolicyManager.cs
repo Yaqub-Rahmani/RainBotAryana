@@ -16,206 +16,132 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Core.Extensions;
+using Business.ValidationRules.FluentValidation.FamilySharePolicy;
+using Core.Utilities.KabulDateTime;
+using Entities.Dtos.FamilySharePolicy;
 
 namespace Business.Concrete
 {
     public class FamilySharePolicyManager : IFamilySharePolicyService
     {
         private readonly IFamilySharePolicyDal _dal;
+        private readonly ITimeProvider _timeProvider;
 
-        public FamilySharePolicyManager(IFamilySharePolicyDal dal) { _dal = dal; }
-
-        // ------------- Okumalar -------------
+        public FamilySharePolicyManager(
+            IFamilySharePolicyDal dal,
+            ITimeProvider timeProvider)
+        {
+            _dal = dal;
+            _timeProvider = timeProvider;
+        }
 
         [CacheAspect(10)]
-        public IDataResult<List<FamilySharePolicy>> GetAll()
-            => new SuccessDataResult<List<FamilySharePolicy>>(
-                _dal.QueryNoTracking().ToList()
-            );
+        public IDataResult<List<FamilySharePolicyDto>> GetAll()
+        {
+            var list = _dal.QueryNoTracking()
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .ThenByDescending(x => x.UpdatedAtUtc)
+                .Select(MapToDto)
+                .ToList();
+
+            return new SuccessDataResult<List<FamilySharePolicyDto>>(list);
+        }
 
         [CacheAspect(10)]
-        public IDataResult<FamilySharePolicy> GetById(Guid id)
+        public IDataResult<FamilySharePolicyDto> GetById(Guid id)
         {
             var e = _dal.QueryNoTracking().FirstOrDefault(x => x.Id == id);
-            return e == null ? new ErrorDataResult<FamilySharePolicy>(null, "یافت نشد.") : new SuccessDataResult<FamilySharePolicy>(e);
+            if (e == null)
+                return new ErrorDataResult<FamilySharePolicyDto>(null, "پالیسی خانواده یافت نشد.");
+
+            return new SuccessDataResult<FamilySharePolicyDto>(MapToDto(e));
         }
 
         [CacheAspect(10)]
-        public IDataResult<PagedResult<FamilySharePolicyDetailDto>> GetDetails(QueryOptions opt)
+        public IDataResult<FamilySharePolicyDto> GetCurrent(DateTime? asOfUtc = null)
         {
-            opt ??= new QueryOptions();
-            var q = _dal.QueryNoTracking();
+            var asOfDate = DateOnly.FromDateTime(asOfUtc ?? _timeProvider.UtcNow());
 
-            q = q.ApplyFilters(opt.Filters);
-
-            if (!string.IsNullOrWhiteSpace(opt.Search))
-            {
-                var key = opt.Search.Trim();
-                q = q.Where(x => (x.Notes ?? "").Contains(key));
-            }
-
-            q = q.ApplySort(opt.Sort);
-            if (!q.Expression.ToString()!.Contains("OrderBy"));
-
-            var projected = q.Select(p => new FamilySharePolicyDetailDto
-            {
-                Id = p.Id,
-                ParentPercent = p.ParentPercent,
-                FemaleWeight = p.FemaleWeight,
-                MaleWeight = p.MaleWeight,
-                Notes = p.Notes
-            });
-
-            var total = projected.Count();
-            var items = projected.ApplyPaging(opt.Page, opt.PageSize).ToList();
-
-            return new SuccessDataResult<PagedResult<FamilySharePolicyDetailDto>>(
-                new PagedResult<FamilySharePolicyDetailDto>
-                {
-                    Items = items,
-                    Page = opt.Page,
-                    PageSize = opt.PageSize,
-                    TotalCount = total
-                });
-        }
-
-        [CacheAspect(10)]
-        public IDataResult<FamilySharePolicyDetailDto> GetDetailById(Guid id)
-        {
-            var dto = _dal.QueryNoTracking().Where(x => x.Id == id)
-                .Select(p => new FamilySharePolicyDetailDto
-                {
-                    Id = p.Id,
-                    ParentPercent = p.ParentPercent,
-                    FemaleWeight = p.FemaleWeight,
-                    MaleWeight = p.MaleWeight,
-                    Notes = p.Notes
-                })
+            var e = _dal.QueryNoTracking()
+                .Where(x => x.CreatedAtUtc <= asOfDate)
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .ThenByDescending(x => x.UpdatedAtUtc)
                 .FirstOrDefault();
 
-            return dto == null ? new ErrorDataResult<FamilySharePolicyDetailDto>(null, "یافت نشد.")
-                               : new SuccessDataResult<FamilySharePolicyDetailDto>(dto);
+            if (e == null)
+                return new ErrorDataResult<FamilySharePolicyDto>(null, "هیچ پالیسی خانواده تعریف نشده است.");
+
+            return new SuccessDataResult<FamilySharePolicyDto>(MapToDto(e));
         }
 
-        // ------------- Aktif politika -------------
-        [CacheAspect(5)]
-        public IDataResult<FamilySharePolicyDetailDto> GetActiveForDate(DateOnly onDate)
+        [ValidationAspect(typeof(FamilySharePolicyCreateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IFamilySharePolicyService.Get")]
+        [SecuredOperation("admin")]
+        public IResult Add(FamilySharePolicyCreateDto dto, int userId)
         {
-            var dto = _dal.QueryNoTracking()
-                .Select(p => new FamilySharePolicyDetailDto
-                {
-                    Id = p.Id,
-                    ParentPercent = p.ParentPercent,
-                    FemaleWeight = p.FemaleWeight,
-                    MaleWeight = p.MaleWeight,
-                    Notes = p.Notes
-                }).FirstOrDefault();
+            var createdDate = dto.CreatedAtUtc ?? DateOnly.FromDateTime(_timeProvider.UtcNow());
 
-            return dto == null
-                ? new ErrorDataResult<FamilySharePolicyDetailDto>(null, "برای این تاریخ سیاست فعالی یافت نشد.")
-                : new SuccessDataResult<FamilySharePolicyDetailDto>(dto);
+            var entity = new FamilySharePolicy
+            {
+                Id = Guid.NewGuid(),
+                ParentPercent = dto.ParentPercent,
+                FemaleWeight = dto.FemaleWeight,
+                MaleWeight = dto.MaleWeight,
+                Notes = dto.Notes,
+                CreatedAtUtc = createdDate,
+                CreatedByUserId = userId
+            };
+
+            _dal.Add(entity);
+            return new SuccessResult("پالیسی تقسیم خانواده ثبت شد.");
         }
 
-        // ------------- Yazmalar -------------
-
-        private bool HasOverlap(DateOnly from, DateOnly? to, Guid? excludeId = null)
+        [ValidationAspect(typeof(FamilySharePolicyUpdateValidator))]
+        [TransactionScopeAspect, CacheRemoveAspect("IFamilySharePolicyService.Get")]
+        [SecuredOperation("admin")]
+        public IResult Update(FamilySharePolicyUpdateDto dto, int userId)
         {
-            var q = _dal.QueryNoTracking();
-            if (excludeId.HasValue) q = q.Where(x => x.Id != excludeId.Value);
+            var existing = _dal.Query().FirstOrDefault(x => x.Id == dto.Id);
+            if (existing == null)
+                return new ErrorResult("پالیسی خانواده یافت نشد.");
 
-            // Çakışma koşulu (EF-çevirilebilir): 
-            // [p.From, p.To]  ×  [from, to]  ⇔  (to == null || p.From <= to) && (p.To == null || p.To >= from)
-            return q.Any();
+            existing.ParentPercent = dto.ParentPercent;
+            existing.FemaleWeight = dto.FemaleWeight;
+            existing.MaleWeight = dto.MaleWeight;
+            existing.Notes = dto.Notes;
+            existing.UpdatedByUserId = userId;
+            existing.UpdatedAtUtc = _timeProvider.UtcNow();
+
+            _dal.Update(existing);
+            return new SuccessResult("پالیسی تقسیم خانواده ویرایش شد.");
         }
 
-
-        [SecuredOperation("familysharepolicy.write,admin")]
-        [ValidationAspect(typeof(FamilySharePolicyValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IFamilySharePolicyService.Get")]
-        public IResult Add(FamilySharePolicy policy)
-        {
-            _dal.Add(policy);
-            return new SuccessResult("سیاست ثبت شد.");
-        }
-
-        [SecuredOperation("familysharepolicy.write,admin")]
-        [ValidationAspect(typeof(FamilySharePolicyValidator))]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IFamilySharePolicyService.Get")]
-        public IResult Update(FamilySharePolicy policy)
-        {
-            var current = _dal.Get(x => x.Id == policy.Id);
-            if (current == null) return new ErrorResult("یافت نشد.");
-
-            current.ParentPercent = policy.ParentPercent;
-            current.FemaleWeight = policy.FemaleWeight;
-            current.MaleWeight = policy.MaleWeight;
-            current.Notes = policy.Notes;
-
-            _dal.Update(current);
-            return new SuccessResult("سیاست بروزرسانی شد.");
-        }
-
-        [SecuredOperation("familysharepolicy.write,admin")]
-        [TransactionScopeAspect]
-        [CacheRemoveAspect("IFamilySharePolicyService.Get")]
+        [TransactionScopeAspect, CacheRemoveAspect("IFamilySharePolicyService.Get")]
+        [SecuredOperation("admin")]
         public IResult Delete(Guid id)
         {
-            var e = _dal.Get(x => x.Id == id);
-            if (e == null) return new ErrorResult("یافت نشد.");
-            _dal.Delete(e);
-            return new SuccessResult("حذف شد.");
+            var existing = _dal.Query().FirstOrDefault(x => x.Id == id);
+            if (existing == null)
+                return new ErrorResult("پالیسی خانواده یافت نشد.");
+
+            _dal.Delete(existing);
+            return new SuccessResult("پالیسی خانواده حذف شد.");
         }
 
-        // ------------- Simülasyon -------------
-        // toplam = parentPart + remain;  parentPart = total * (ParentPercent/100)
-        // remain ağırlıklarla paylaştırılır.
-        public IDataResult<object> Simulate(decimal totalAmount, int femaleCount, int maleCount, DateOnly? onDate = null)
+        private static FamilySharePolicyDto MapToDto(FamilySharePolicy x)
         {
-            if (totalAmount < 0) return new ErrorDataResult<object>(null, "مبلغ منفی نیست.");
-            if (femaleCount < 0 || maleCount < 0) return new ErrorDataResult<object>(null, "تعداد منفی نیست.");
-
-            FamilySharePolicy policy;
-            if (onDate.HasValue)
+            return new FamilySharePolicyDto
             {
-                var r = GetActiveForDate(onDate.Value);
-                if (!r.Success) return new ErrorDataResult<object>(null, r.Message);
-                policy = new FamilySharePolicy
-                {
-                    ParentPercent = r.Data.ParentPercent,
-                    FemaleWeight = r.Data.FemaleWeight,
-                    MaleWeight = r.Data.MaleWeight
-                };
-            }
-            else
-            {
-                // En son politika (EffectiveFrom en yeni)
-                var p = _dal.QueryNoTracking().FirstOrDefault();
-                if (p == null) return new ErrorDataResult<object>(null, "هیچ سیاستی ثبت نشده است.");
-                policy = p;
-            }
-
-            var parentPart = Math.Round(totalAmount * (policy.ParentPercent / 100m), 2, MidpointRounding.AwayFromZero);
-            var remain = Math.Round(totalAmount - parentPart, 2, MidpointRounding.AwayFromZero);
-
-            var totalWeight = (policy.FemaleWeight * femaleCount) + (policy.MaleWeight * maleCount);
-            decimal unit = totalWeight > 0 ? Math.Round(remain / totalWeight, 6, MidpointRounding.AwayFromZero) : 0m;
-
-            return new SuccessDataResult<object>(new
-            {
-                totalAmount,
-                parentPercent = policy.ParentPercent,
-                parentPart,
-                remain,
-                femaleWeight = policy.FemaleWeight,
-                maleWeight = policy.MaleWeight,
-                femaleCount,
-                maleCount,
-                unitPerWeight = unit,
-                perFemale = Math.Round(unit * policy.FemaleWeight, 2, MidpointRounding.AwayFromZero),
-                perMale = Math.Round(unit * policy.MaleWeight, 2, MidpointRounding.AwayFromZero)
-            });
+                Id = x.Id,
+                ParentPercent = x.ParentPercent,
+                FemaleWeight = x.FemaleWeight,
+                MaleWeight = x.MaleWeight,
+                Notes = x.Notes,
+                CreatedAtUtc = x.CreatedAtUtc,
+                CreatedByUserId = x.CreatedByUserId,
+                UpdatedByUserId = x.UpdatedByUserId,
+                UpdatedAtUtc = x.UpdatedAtUtc
+            };
         }
     }
 }

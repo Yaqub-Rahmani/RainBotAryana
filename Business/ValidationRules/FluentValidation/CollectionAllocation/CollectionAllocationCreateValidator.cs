@@ -12,26 +12,14 @@ namespace Business.ValidationRules.FluentValidation.CollectionAllocation
     {
         public CollectionAllocationCreateValidator()
         {
-            RuleFor(x => x.CollectionId).NotEmpty().WithMessage("شناسه دریافت معتبر نیست.");
-            RuleFor(x => x.Kind).IsInEnum().WithMessage("نوع تخصیص معتبر نیست.");
+            RuleFor(x => x.CollectionId)
+                .NotEqual(Guid.Empty).WithMessage("پرداخت نامعتبر است.");
 
             RuleFor(x => x.Amount)
-                .GreaterThan(0)
-                .WithMessage("مبلغ باید بیشتر از صفر باشد.");
+                .GreaterThan(0).WithMessage("مبلغ باید بزرگتر از صفر باشد.");
 
-            RuleFor(x => x.PeriodYear)
-                .InclusiveBetween(1300, 1500)
-                .When(x => x.PeriodYear.HasValue)
-                .WithMessage("سال دوره نامعتبر است.");
-
-            RuleFor(x => x.PeriodMonth)
-                .InclusiveBetween(1, 12)
-                .When(x => x.PeriodMonth.HasValue)
-                .WithMessage("ماه دوره نامعتبر است.");
-
-            RuleFor(x => x.Notes)
-                .MaximumLength(300)
-                .WithMessage("توضیحات حداکثر ۳۰۰ کاراکتر است.");
+            RuleFor(x => x.Kind)
+                .IsInEnum().WithMessage("نوع توزیع نامعتبر است.");
         }
     }
 }

@@ -11,9 +11,6 @@ using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //FamilyPayout & FamilyPayoutLine(Aile havuzunun paylaştırılması)
-    //Aile havuzundaki tutarın, İslami pay kuralına göre üyelere dağıtıldığı olay(ve satırları).
-    //Business pay hesabını yapar; burada kayıt altına alınır.
 
     public class FamilyPayoutLine : IEntity
     {
@@ -26,7 +23,6 @@ namespace Entities.Concrete
         [Required]
         public Guid FamilyMemberId { get; set; }
 
-        /// <summary>Üyeye ayrılan tutar</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 

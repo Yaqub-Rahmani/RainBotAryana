@@ -24,5 +24,7 @@ namespace DataAccess.Concrete.EntityFramework
 
             return query.ToList();
         }
+
+        public IQueryable<User> QueryNoTracking() => _context.Set<User>().AsNoTracking();
     }
 }

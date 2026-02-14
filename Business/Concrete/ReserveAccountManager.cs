@@ -39,8 +39,8 @@ namespace Business.Concrete
             if (from.HasValue) entries = entries.Where(e => e.OccurredAtUtc >= from.Value);
             if (to.HasValue) entries = entries.Where(e => e.OccurredAtUtc <= to.Value);
 
-            var totalIn = entries.Where(e => e.Direction == ReserveEntryDirection.In).Sum(e => (decimal?)e.Amount) ?? 0m;
-            var totalOut = entries.Where(e => e.Direction == ReserveEntryDirection.Out).Sum(e => (decimal?)e.Amount) ?? 0m;
+            var totalIn = entries.Where(e => e.Direction == BalanceDirection.In).Sum(e => (decimal?)e.Amount) ?? 0m;
+            var totalOut = entries.Where(e => e.Direction == BalanceDirection.Out).Sum(e => (decimal?)e.Amount) ?? 0m;
 
             return new ReserveAccountDetailDto
             {
@@ -134,8 +134,8 @@ namespace Business.Concrete
                 select new
                 {
                     AccountId = g.Key,
-                    TotalIn = g.Where(x => x.Direction == ReserveEntryDirection.In).Sum(x => (decimal?)x.Amount) ?? 0m,
-                    TotalOut = g.Where(x => x.Direction == ReserveEntryDirection.Out).Sum(x => (decimal?)x.Amount) ?? 0m
+                    TotalIn = g.Where(x => x.Direction == BalanceDirection.In).Sum(x => (decimal?)x.Amount) ?? 0m,
+                    TotalOut = g.Where(x => x.Direction == BalanceDirection.Out).Sum(x => (decimal?)x.Amount) ?? 0m
         };
 
             var list = grouped.AsEnumerable().Select(x =>
@@ -174,8 +174,8 @@ namespace Business.Concrete
                 select new
                 {
                     Type = g.Key,
-                    TotalIn = g.Where(x => x.e.Direction == ReserveEntryDirection.In).Sum(x => (decimal?)x.e.Amount) ?? 0m,
-                    TotalOut = g.Where(x => x.e.Direction == ReserveEntryDirection.Out).Sum(x => (decimal?)x.e.Amount) ?? 0m
+                    TotalIn = g.Where(x => x.e.Direction == BalanceDirection.In).Sum(x => (decimal?)x.e.Amount) ?? 0m,
+                    TotalOut = g.Where(x => x.e.Direction == BalanceDirection.Out).Sum(x => (decimal?)x.e.Amount) ?? 0m
                 };
 
             var list = q.AsEnumerable()

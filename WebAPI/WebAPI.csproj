@@ -13,6 +13,7 @@
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
+		<PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.1" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Core\Core.csproj" />
@@ -20,21 +21,6 @@
 		<ProjectReference Include="..\Entities\Entities.csproj" />
 		<ProjectReference Include="..\DataAccess\DataAccess.csproj" />
 	</ItemGroup>
-
-	<!-- Native DLL'leri çıktı klasörüne kopyala 
-	<ItemGroup>
-		DLL'leri WebAPI projesinde 'native\' klasörü altına koy
-		<None Include="native\libzkfp.dll">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Include="native\libzkfpcsharp.dll">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="native\" />
-	</ItemGroup>-->
-
 
 	<ItemGroup>
 		<None Update="..\libs\zk\libzkfpcsharp.dll">
@@ -58,6 +44,39 @@
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>
+	<ItemGroup>
+	  <Content Update="wwwroot\Pdf\AryanaLogo.png">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-Black.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-Bold.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-ExtraBold.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-ExtraLight.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-Light.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-Medium.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-Regular.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-SemiBold.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\Pdf\fonts\Vazirmatn-Thin.ttf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+
 	<PropertyGroup>
 		<PlatformTarget>x86</PlatformTarget>
 	</PropertyGroup>

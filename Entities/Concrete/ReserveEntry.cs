@@ -12,13 +12,6 @@ using System.Text.Json.Serialization;
 
 namespace Entities.Concrete
 {
-    //ReserveEntry(Rezerv Hareketi)
-    //Her bir giriş/çıkış satırı.
-    //Kaynağına referans verebilmek için opsiyonel bağlantılar:
-    //Elektrik rezervine giriş = genelde CollectionAllocation (Electricity) üzerinden,
-    //Market rezervine giriş = CollectionAllocation(Market),
-    //Owner rezervine giriş = CollectionAllocation(Owner) iç dağıtımından,
-    //Çıkış = bakım / onarım gideri vb. (serbest açıklama + opsiyonel belge no).
 
     public class ReserveEntry : IEntity
     {
@@ -28,18 +21,14 @@ namespace Entities.Concrete
         [Required]
         public Guid ReserveAccountId { get; set; }
 
-        /// <summary>Giriş mi çıkış mı?</summary>
         [Required]
         public BalanceDirection Direction { get; set; }
 
-        /// <summary>Tutar (2 ondalık)</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 
         public Guid? MoneyEntryId { get; set; }
 
-
-        /// <summary>İşlem zamanı</summary>
         public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
 
         /// <summary>Açıklama</summary>
@@ -54,13 +43,11 @@ namespace Entities.Concrete
 
         [MaxLength(100)]
         public string? PaymentReference { get; set; }
-        // --- Opsiyonel iz bağlantıları (nereden geldi/nereye gitti?) ---
-        public Guid? CollectionId { get; set; }            // Tahsilatın kendisi
-        public Guid? CollectionAllocationId { get; set; }  // Tahsilat dağıtım satırı
-        public Guid? MeterReadingId { get; set; }          // Elektrik rezervine girişte ilişki
-        public Guid? ContractId { get; set; }              // Bağlamı güçlendirmek için
+        public Guid? CollectionId { get; set; }          
+        public Guid? CollectionAllocationId { get; set; } 
+        public Guid? MeterReadingId { get; set; }         
+        public Guid? ContractId { get; set; }            
 
-        // Harcama belgesi/numarası (çıkışlarda)
         [MaxLength(100)]
         public string? ExternalDocNo { get; set; }
 

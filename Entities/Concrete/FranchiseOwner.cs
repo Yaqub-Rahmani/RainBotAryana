@@ -11,20 +11,17 @@ using System.Threading.Tasks;
 
 namespace Entities.Concrete
 {
-    //FranchiseOwner(İmtiyaz Sahibi)
-    //Bir veya birden fazla dükkânda payı olabilen imtiyaz sahibini temsil eder.
-    //Kendi bakiye kayıtlarına ileride bağlayacağız; şimdilik kimlik ve iletişim odaklı.
+
     public class FranchiseOwner : IEntity
     {
         [Key]
         public Guid Id { get; set; }
 
-        /// <summary>Ad Soyad veya tüzel unvan</summary>
         [Required, MaxLength(200)]
         public string DisplayName { get; set; } = default!;
 
         public string FatherName { get; set; }
-        /// <summary>E-posta (opsiyonel)</summary>
+
         [MaxLength(200)]
         public string? Email { get; set; }
 
@@ -33,7 +30,7 @@ namespace Entities.Concrete
 
         public Gender Gender { get; set; } = Gender.Male;
 
-        /// <summary>Ek notlar (opsiyonel)</summary>
+
         [MaxLength(1000)]
         public string? Notes { get; set; }
 
